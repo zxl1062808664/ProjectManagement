@@ -1,0 +1,1634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Task Atlas | 任务与版本管理</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <div class="app-shell">
+      <aside class="toolbox panel" aria-label="功能导航">
+        <div class="brand-block toolbox-brand">
+          <p class="eyebrow">Task Atlas</p>
+          <h1>任务与版本管理</h1>
+          <p class="brand-copy">
+            当前包含任务管理、App 版本管理、常用工具、数据工具和账号与同步五个模块。任务管理和版本管理分别独立运行，不会混在同一块里。
+          </p>
+        </div>
+
+        <section class="toolbox-current">
+          <div class="toolbox-pills">
+            <span class="auth-state-pill" id="authStatePill">游客模式</span>
+            <span class="workspace-mode-pill compact-pill" id="workspaceModePill">
+              游客本地模式
+            </span>
+          </div>
+
+          <div>
+            <p class="section-kicker">Current Context</p>
+            <h2 id="toolboxProjectName">本地收件箱</h2>
+            <p class="toolbox-copy" id="toolboxProjectMeta">
+              当前先展示任务总览，点击详情可切到对应项目查看和维护任务。
+            </p>
+          </div>
+        </section>
+
+        <nav class="toolbox-groups" id="toolboxNav">
+          <section class="toolbox-group" data-group="task-management" aria-label="任务管理分类">
+            <button
+              class="toolbox-group-toggle"
+              type="button"
+              data-group-toggle="task-management"
+              aria-expanded="true"
+              aria-controls="toolbox-group-task-management"
+            >
+              <span class="toolbox-group-copy">
+                <span class="section-kicker toolbox-group-kicker">Category</span>
+                <strong>任务管理</strong>
+                <small>先看总览，再进入项目详情管理任务内容、状态和时间。</small>
+              </span>
+              <span class="toolbox-group-arrow" aria-hidden="true"></span>
+            </button>
+
+            <div class="toolbox-group-list" id="toolbox-group-task-management">
+              <button class="toolbox-button is-active" type="button" data-tool="overview">
+                <span class="toolbox-button-kicker">Overview</span>
+                <strong>任务总览</strong>
+                <small>查看总项目数、任务状态分布和每个项目的任务摘要</small>
+              </button>
+
+              <button class="toolbox-button" type="button" data-tool="details">
+                <span class="toolbox-button-kicker">Details</span>
+                <strong>任务详情</strong>
+                <small>按项目查看任务列表，并通过弹出面板管理项目和新建任务</small>
+              </button>
+            </div>
+          </section>
+
+          <section class="toolbox-group" data-group="app-version" aria-label="App 版本管理分类">
+            <button
+              class="toolbox-group-toggle"
+              type="button"
+              data-group-toggle="app-version"
+              aria-expanded="true"
+              aria-controls="toolbox-group-app-version"
+            >
+              <span class="toolbox-group-copy">
+                <span class="section-kicker toolbox-group-kicker">Category</span>
+                <strong>App 版本管理</strong>
+                <small>先看应用版本总览，再进入详情维护 App 信息和版本节奏。</small>
+              </span>
+              <span class="toolbox-group-arrow" aria-hidden="true"></span>
+            </button>
+
+            <div class="toolbox-group-list" id="toolbox-group-app-version">
+              <button class="toolbox-button" type="button" data-tool="app-overview">
+                <span class="toolbox-button-kicker">App Overview</span>
+                <strong>版本总览</strong>
+                <small>查看 App 数量、版本状态分布和每个应用的最近版本摘要</small>
+              </button>
+
+              <button class="toolbox-button" type="button" data-tool="app-details">
+                <span class="toolbox-button-kicker">Version Details</span>
+                <strong>版本详情</strong>
+                <small>按应用查看版本列表，并通过弹出面板管理 App 和版本记录</small>
+              </button>
+            </div>
+          </section>
+
+          <section class="toolbox-group" data-group="data-tools" aria-label="数据处理分类">
+            <button
+              class="toolbox-group-toggle"
+              type="button"
+              data-group-toggle="data-tools"
+              aria-expanded="true"
+              aria-controls="toolbox-group-data-tools"
+            >
+              <span class="toolbox-group-copy">
+                <span class="section-kicker toolbox-group-kicker">Category</span>
+                <strong>数据处理</strong>
+                <small>集中处理导入、导出、示例数据和本地清理。</small>
+              </span>
+              <span class="toolbox-group-arrow" aria-hidden="true"></span>
+            </button>
+
+            <div class="toolbox-group-list" id="toolbox-group-data-tools">
+              <button class="toolbox-button" type="button" data-tool="data">
+                <span class="toolbox-button-kicker">Data Tools</span>
+                <strong>数据工具</strong>
+                <small>导入、导出、示例数据和本地数据清理</small>
+              </button>
+            </div>
+          </section>
+
+          <section class="toolbox-group" data-group="common-tools" aria-label="常用工具分类">
+            <button
+              class="toolbox-group-toggle"
+              type="button"
+              data-group-toggle="common-tools"
+              aria-expanded="true"
+              aria-controls="toolbox-group-common-tools"
+            >
+              <span class="toolbox-group-copy">
+                <span class="section-kicker toolbox-group-kicker">Category</span>
+                <strong>常用工具</strong>
+                <small>集中放置高频的快捷操作、摘要复制和工作区快照工具。</small>
+              </span>
+              <span class="toolbox-group-arrow" aria-hidden="true"></span>
+            </button>
+
+            <div class="toolbox-group-list toolbox-group-list-utility" id="toolbox-group-common-tools">
+              <button class="toolbox-button toolbox-button-wide" type="button" data-tool="utilities">
+                <span class="toolbox-button-kicker">Utilities</span>
+                <strong>工具台</strong>
+                <small>查看当前上下文，并集中使用所有常用快捷工具</small>
+              </button>
+
+              <button
+                class="toolbox-button toolbox-action-button"
+                type="button"
+                data-tool-action="refresh-workspace"
+              >
+                <span class="toolbox-button-kicker">Refresh</span>
+                <strong>刷新工作区</strong>
+                <small>重新同步当前数据</small>
+              </button>
+
+              <button
+                class="toolbox-button toolbox-action-button"
+                type="button"
+                data-tool-action="open-current-project"
+              >
+                <span class="toolbox-button-kicker">Details</span>
+                <strong>打开任务详情</strong>
+                <small>跳到当前项目详情</small>
+              </button>
+
+              <button
+                class="toolbox-button toolbox-action-button"
+                type="button"
+                data-tool-action="copy-workspace-summary"
+              >
+                <span class="toolbox-button-kicker">Copy</span>
+                <strong>复制工作区摘要</strong>
+                <small>复制全局同步说明</small>
+              </button>
+
+              <button
+                class="toolbox-button toolbox-action-button"
+                type="button"
+                data-tool-action="copy-project-summary"
+              >
+                <span class="toolbox-button-kicker">Copy</span>
+                <strong>复制项目摘要</strong>
+                <small>复制当前项目说明</small>
+              </button>
+
+              <button
+                class="toolbox-button toolbox-action-button"
+                type="button"
+                data-tool-action="copy-pending-tasks"
+              >
+                <span class="toolbox-button-kicker">Pending</span>
+                <strong>复制待办清单</strong>
+                <small>整理未完成任务</small>
+              </button>
+
+              <button
+                class="toolbox-button toolbox-action-button"
+                type="button"
+                data-tool-action="copy-project-json"
+              >
+                <span class="toolbox-button-kicker">JSON</span>
+                <strong>复制项目 JSON</strong>
+                <small>快速复制结构数据</small>
+              </button>
+
+              <button
+                class="toolbox-button toolbox-action-button"
+                type="button"
+                data-tool-action="export-workspace"
+              >
+                <span class="toolbox-button-kicker">Export</span>
+                <strong>导出工作区</strong>
+                <small>导出完整快照</small>
+              </button>
+            </div>
+          </section>
+
+          <section class="toolbox-group" data-group="account-sync" aria-label="账号连接分类">
+            <button
+              class="toolbox-group-toggle"
+              type="button"
+              data-group-toggle="account-sync"
+              aria-expanded="true"
+              aria-controls="toolbox-group-account-sync"
+            >
+              <span class="toolbox-group-copy">
+                <span class="section-kicker toolbox-group-kicker">Category</span>
+                <strong>账号连接</strong>
+                <small>管理登录会话，以及把游客本地数据显式接入账号云端。</small>
+              </span>
+              <span class="toolbox-group-arrow" aria-hidden="true"></span>
+            </button>
+
+            <div class="toolbox-group-list" id="toolbox-group-account-sync">
+              <button class="toolbox-button" type="button" data-tool="account">
+                <span class="toolbox-button-kicker">Account</span>
+                <strong>账号与同步</strong>
+                <small>登录、会话刷新和游客数据导入云端</small>
+              </button>
+            </div>
+          </section>
+        </nav>
+      </aside>
+
+      <main class="workspace">
+        <div class="workspace-stage">
+          <section class="workspace-view" data-view="overview">
+            <header class="topbar panel">
+              <div>
+                <p class="eyebrow" id="todayLabel">今天</p>
+                <h2>任务总览</h2>
+                <p class="topbar-copy">
+                  先看当前总共有多少项目、各状态任务分布，以及每个项目里有哪些任务摘要；点击详情再进入具体项目管理。
+                </p>
+              </div>
+            </header>
+
+            <div class="overview-grid overview-compact-grid">
+              <section class="panel panel-section" aria-label="任务总览统计">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Workspace Pulse</p>
+                    <h2>全局任务统计</h2>
+                  </div>
+                </div>
+
+                <section class="stats-grid">
+                  <article class="stat-card accent-sand">
+                    <span class="stat-label">总项目</span>
+                    <strong class="stat-value" id="overviewProjectCount">0</strong>
+                    <span class="stat-note">当前工作区项目总数</span>
+                  </article>
+
+                  <article class="stat-card accent-blue">
+                    <span class="stat-label">活跃项目</span>
+                    <strong class="stat-value" id="overviewActiveProjectCount">0</strong>
+                    <span class="stat-note">未归档项目数量</span>
+                  </article>
+
+                  <article class="stat-card accent-green">
+                    <span class="stat-label">总任务</span>
+                    <strong class="stat-value" id="overviewTaskCount">0</strong>
+                    <span class="stat-note">全部项目任务总数</span>
+                  </article>
+
+                  <article class="stat-card accent-red">
+                    <span class="stat-label">完成率</span>
+                    <strong class="stat-value" id="overviewCompletionRate">0%</strong>
+                    <span class="stat-note">已完成任务占比</span>
+                  </article>
+                </section>
+              </section>
+
+              <section class="panel panel-section" aria-label="任务状态分布">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Status Mix</p>
+                    <h2>任务状态分布</h2>
+                  </div>
+                </div>
+
+                <div class="tool-metrics">
+                  <article class="tool-metric-card">
+                    <span>未开始</span>
+                    <strong id="overviewTodoCount">0</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>进行中</span>
+                    <strong id="overviewDoingCount">0</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>待验收</span>
+                    <strong id="overviewReviewCount">0</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>已完成</span>
+                    <strong id="overviewDoneCount">0</strong>
+                  </article>
+                </div>
+              </section>
+
+              <section class="panel panel-section wide-span" aria-label="项目任务摘要">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Project Snapshot</p>
+                    <h2>项目任务摘要</h2>
+                  </div>
+                </div>
+
+                <div class="project-overview-grid" id="projectOverviewList"></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="workspace-view" data-view="details" hidden>
+            <header class="topbar panel">
+              <div>
+                <p class="eyebrow">Task Details</p>
+                <h2>任务详情</h2>
+                <p class="topbar-copy">
+                  选择一个项目后，这里会显示当前项目的任务列表。项目管理和新建任务通过按钮弹出面板处理。
+                </p>
+              </div>
+              <div class="topbar-actions detail-quick-actions" aria-label="任务详情快捷操作">
+                <div class="detail-project-switcher">
+                  <span>当前项目</span>
+                  <select id="detailProjectSelect" aria-label="选择任务详情项目">
+                    <option value="">暂无项目</option>
+                  </select>
+                </div>
+                <button
+                  class="ghost-button"
+                  id="detailProjectPanelButton"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="detailProjectPanel"
+                >
+                  项目管理
+                </button>
+                <button
+                  class="primary-button"
+                  id="detailTaskPanelButton"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="detailTaskPanel"
+                >
+                  新建任务
+                </button>
+              </div>
+            </header>
+
+            <div class="detail-panel-backdrop" id="detailPanelBackdrop" hidden></div>
+
+            <div class="detail-panel-layer" aria-live="polite">
+              <section
+                class="panel panel-section detail-panel detail-panel-wide"
+                id="detailProjectPanel"
+                aria-label="项目管理面板"
+                role="dialog"
+                aria-modal="true"
+                hidden
+              >
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Project Manager</p>
+                    <h2>项目管理</h2>
+                  </div>
+                  <div class="detail-panel-header-actions">
+                    <span class="panel-badge" id="detailProjectCountBadge">0 个项目</span>
+                    <button
+                      class="ghost-button mini-button"
+                      type="button"
+                      data-detail-panel-close="project"
+                    >
+                      关闭
+                    </button>
+                  </div>
+                </div>
+
+                <p class="auth-copy" id="projectFormCopy">
+                  先选择项目，或直接创建一个新项目作为任务容器。
+                </p>
+
+                <form class="task-form" id="projectForm">
+                  <input id="projectIdInput" type="hidden" />
+
+                  <div class="field-grid">
+                    <label class="field" for="projectNameInput">
+                      <span>项目名称</span>
+                      <input
+                        id="projectNameInput"
+                        type="text"
+                        maxlength="80"
+                        placeholder="输入项目名称"
+                        required
+                      />
+                    </label>
+
+                    <label class="field" for="projectColorInput">
+                      <span>项目颜色</span>
+                      <input id="projectColorInput" type="color" value="#c16b39" />
+                    </label>
+                  </div>
+
+                  <label class="field" for="projectDescriptionInput">
+                    <span>项目说明</span>
+                    <textarea
+                      id="projectDescriptionInput"
+                      maxlength="600"
+                      placeholder="描述这个项目主要包含哪些任务"
+                    ></textarea>
+                  </label>
+
+                  <div class="form-actions">
+                    <button class="primary-button" id="projectSubmitButton" type="submit">
+                      创建项目
+                    </button>
+                    <button class="ghost-button" id="projectNewButton" type="button">
+                      新建项目
+                    </button>
+                    <button class="ghost-button" id="projectArchiveButton" type="button">
+                      归档项目
+                    </button>
+                    <button class="danger-button" id="projectDeleteButton" type="button">
+                      删除项目
+                    </button>
+                  </div>
+                </form>
+
+                <div class="detail-subsection">
+                  <div class="section-heading section-heading-compact">
+                    <div>
+                      <p class="section-kicker">Project Tags</p>
+                      <h2>项目标签</h2>
+                    </div>
+                  </div>
+
+                  <p class="auth-copy" id="tagManagerCopy">
+                    为当前项目补充标签，后续可在任务里关联这些标签并用于搜索筛选。
+                  </p>
+
+                  <form class="task-form" id="tagForm">
+                    <input id="tagIdInput" type="hidden" />
+
+                    <div class="field-grid">
+                      <label class="field" for="tagNameInput">
+                        <span>标签名称</span>
+                        <input
+                          id="tagNameInput"
+                          type="text"
+                          maxlength="40"
+                          placeholder="例如：前端、接口、验收"
+                          required
+                        />
+                      </label>
+
+                      <label class="field" for="tagColorInput">
+                        <span>标签颜色</span>
+                        <input id="tagColorInput" type="color" value="#245a73" />
+                      </label>
+                    </div>
+
+                    <div class="form-actions">
+                      <button class="primary-button" id="tagSubmitButton" type="submit">
+                        创建标签
+                      </button>
+                      <button class="ghost-button" id="tagResetButton" type="button">
+                        取消编辑
+                      </button>
+                    </div>
+                  </form>
+
+                  <div class="stacked-list" id="detailTagList"></div>
+                </div>
+              </section>
+
+              <section
+                class="panel panel-section detail-panel"
+                id="detailTaskPanel"
+                aria-label="任务编辑面板"
+                role="dialog"
+                aria-modal="true"
+                hidden
+              >
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Task Editor</p>
+                    <h2>任务编辑</h2>
+                  </div>
+                  <div class="detail-panel-header-actions">
+                    <span class="panel-badge" id="taskEditorModeBadge">新任务</span>
+                    <button
+                      class="ghost-button mini-button"
+                      type="button"
+                      data-detail-panel-close="task"
+                    >
+                      关闭
+                    </button>
+                  </div>
+                </div>
+
+                <p class="auth-copy" id="taskProjectHint">
+                  选择项目后，在这里创建或编辑该项目下的任务。
+                </p>
+
+                <form class="task-form" id="taskForm">
+                  <input id="taskIdInput" type="hidden" />
+
+                  <label class="field" for="titleInput">
+                    <span>任务标题</span>
+                    <input
+                      id="titleInput"
+                      type="text"
+                      maxlength="120"
+                      placeholder="输入任务标题"
+                      required
+                    />
+                  </label>
+
+                  <label class="field" for="descriptionInput">
+                    <span>任务说明</span>
+                    <textarea
+                      id="descriptionInput"
+                      maxlength="1200"
+                      placeholder="说明这个任务要做什么"
+                    ></textarea>
+                  </label>
+
+                  <label class="field" for="notesInput">
+                    <span>任务备注</span>
+                    <textarea
+                      id="notesInput"
+                      maxlength="2000"
+                      placeholder="补充执行细节、沟通记录或临时说明"
+                    ></textarea>
+                  </label>
+
+                  <div class="field-grid">
+                    <label class="field" for="statusInput">
+                      <span>任务状态</span>
+                      <select id="statusInput">
+                        <option value="todo">未开始</option>
+                        <option value="doing">进行中</option>
+                        <option value="review">待验收</option>
+                        <option value="done">已完成</option>
+                      </select>
+                    </label>
+
+                    <label class="field" for="priorityInput">
+                      <span>优先级</span>
+                      <select id="priorityInput">
+                        <option value="low">低</option>
+                        <option value="medium">中</option>
+                        <option value="high">高</option>
+                        <option value="urgent">紧急</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="field-grid">
+                    <label class="field" for="assigneeInput">
+                      <span>负责人</span>
+                      <input
+                        id="assigneeInput"
+                        type="text"
+                        maxlength="80"
+                        placeholder="输入负责人名称"
+                      />
+                    </label>
+
+                    <label class="field" for="startDateInput">
+                      <span>开始日期</span>
+                      <input id="startDateInput" type="date" />
+                    </label>
+                  </div>
+
+                  <label class="field" for="dueDateInput">
+                    <span>截止日期</span>
+                    <input id="dueDateInput" type="date" />
+                  </label>
+
+                  <label class="field" for="completedDateInput">
+                    <span>完成日期</span>
+                    <input id="completedDateInput" type="date" />
+                    <small class="field-hint">
+                      当任务状态为“已完成”时会保留该日期；改回其他状态时将自动清空。
+                    </small>
+                  </label>
+
+                  <div class="field">
+                    <span>关联标签</span>
+                    <div class="tag-picker" id="taskTagPicker"></div>
+                  </div>
+
+                  <label class="field" for="subtasksInput">
+                    <span>子任务清单</span>
+                    <textarea
+                      id="subtasksInput"
+                      maxlength="2000"
+                      placeholder="每行一个子任务，例如：&#10;[ ] 整理接口字段&#10;[x] 完成首页联调"
+                    ></textarea>
+                    <small class="field-hint">
+                      每行一个子任务；以 <code>[x]</code> 开头表示已完成，不写则默认为未完成。
+                    </small>
+                  </label>
+
+                  <div class="form-actions">
+                    <button class="primary-button" id="taskSubmitButton" type="submit">
+                      创建任务
+                    </button>
+                    <button class="ghost-button" id="taskResetButton" type="button">
+                      取消编辑
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
+
+            <section class="panel panel-section detail-task-list-panel" aria-label="项目任务列表">
+              <div class="section-heading">
+                <div>
+                  <p class="section-kicker">Task List</p>
+                  <h2>任务列表</h2>
+                </div>
+                <span class="panel-badge" id="taskListSummary">0 项任务</span>
+              </div>
+
+              <p class="auth-copy" id="detailCurrentProjectMeta">
+                这里会列出当前项目的全部任务、状态和时间信息。
+              </p>
+
+              <div class="detail-filter-grid">
+                <label class="field" for="taskSearchInput">
+                  <span>任务搜索</span>
+                  <input
+                    id="taskSearchInput"
+                    type="search"
+                    placeholder="按标题、负责人、说明、备注、标签或子任务搜索"
+                  />
+                </label>
+
+                <label class="field" for="taskStatusFilterInput">
+                  <span>状态筛选</span>
+                  <select id="taskStatusFilterInput">
+                    <option value="all">全部状态</option>
+                    <option value="todo">未开始</option>
+                    <option value="doing">进行中</option>
+                    <option value="review">待验收</option>
+                    <option value="done">已完成</option>
+                  </select>
+                </label>
+
+                <label class="field" for="taskTagFilterInput">
+                  <span>标签筛选</span>
+                  <select id="taskTagFilterInput">
+                    <option value="all">全部标签</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="bulk-action-row">
+                <button class="ghost-button" id="selectVisibleTasksButton" type="button">
+                  选择当前结果
+                </button>
+
+                <span class="panel-badge" id="selectedTaskCountBadge">已选 0 项</span>
+
+                <label class="field compact-field" for="bulkStatusInput">
+                  <span>批量状态</span>
+                  <select id="bulkStatusInput">
+                    <option value="todo">未开始</option>
+                    <option value="doing">进行中</option>
+                    <option value="review">待验收</option>
+                    <option value="done">已完成</option>
+                  </select>
+                </label>
+
+                <button class="primary-button" id="applyBulkStatusButton" type="button">
+                  应用到已选任务
+                </button>
+              </div>
+
+              <div class="task-record-list compact-task-record-list" id="taskDetailList"></div>
+            </section>
+          </section>
+
+          <section class="workspace-view" data-view="app-overview" hidden>
+            <header class="topbar panel">
+              <div>
+                <p class="eyebrow">Release Radar</p>
+                <h2>版本总览</h2>
+                <p class="topbar-copy">
+                  先看当前总共有多少个 App、版本状态如何分布，以及每个应用最近在推进哪些版本，再进入详情维护发布节奏。
+                </p>
+              </div>
+            </header>
+
+            <div class="overview-grid overview-compact-grid">
+              <section class="panel panel-section" aria-label="App 版本总览统计">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Release Pulse</p>
+                    <h2>全局版本统计</h2>
+                  </div>
+                </div>
+
+                <section class="stats-grid">
+                  <article class="stat-card accent-sand">
+                    <span class="stat-label">总应用</span>
+                    <strong class="stat-value" id="appOverviewAppCount">0</strong>
+                    <span class="stat-note">当前工作区应用总数</span>
+                  </article>
+
+                  <article class="stat-card accent-blue">
+                    <span class="stat-label">活跃应用</span>
+                    <strong class="stat-value" id="appOverviewActiveAppCount">0</strong>
+                    <span class="stat-note">未归档应用数量</span>
+                  </article>
+
+                  <article class="stat-card accent-green">
+                    <span class="stat-label">总版本</span>
+                    <strong class="stat-value" id="appOverviewVersionCount">0</strong>
+                    <span class="stat-note">全部应用版本总数</span>
+                  </article>
+
+                  <article class="stat-card accent-red">
+                    <span class="stat-label">发布率</span>
+                    <strong class="stat-value" id="appOverviewReleaseRate">0%</strong>
+                    <span class="stat-note">已发布版本占比</span>
+                  </article>
+                </section>
+              </section>
+
+              <section class="panel panel-section" aria-label="版本状态分布">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Version Mix</p>
+                    <h2>版本状态分布</h2>
+                  </div>
+                </div>
+
+                <div class="tool-metrics">
+                  <article class="tool-metric-card">
+                    <span>待规划</span>
+                    <strong id="appOverviewTodoCount">0</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>开发中</span>
+                    <strong id="appOverviewDoingCount">0</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>待发布</span>
+                    <strong id="appOverviewReviewCount">0</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>已发布</span>
+                    <strong id="appOverviewDoneCount">0</strong>
+                  </article>
+                </div>
+              </section>
+
+              <section class="panel panel-section wide-span" aria-label="应用版本摘要">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">App Snapshot</p>
+                    <h2>应用版本摘要</h2>
+                  </div>
+                </div>
+
+                <div class="project-overview-grid" id="appVersionOverviewList"></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="workspace-view" data-view="app-details" hidden>
+            <header class="topbar panel">
+              <div>
+                <p class="eyebrow">Version Details</p>
+                <h2>版本详情</h2>
+                <p class="topbar-copy">
+                  选择一个 App 后，这里会显示当前应用的版本列表。App 管理和新建版本通过按钮弹出面板处理。
+                </p>
+              </div>
+              <div class="topbar-actions detail-quick-actions" aria-label="版本详情快捷操作">
+                <div class="detail-project-switcher">
+                  <span>当前 App</span>
+                  <select id="appDetailAppSelect" aria-label="选择版本详情应用">
+                    <option value="">暂无 App</option>
+                  </select>
+                </div>
+                <button
+                  class="ghost-button"
+                  id="appDetailAppPanelButton"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="appDetailAppPanel"
+                >
+                  App 管理
+                </button>
+                <button
+                  class="primary-button"
+                  id="appDetailVersionPanelButton"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="appDetailVersionPanel"
+                >
+                  新建版本
+                </button>
+              </div>
+            </header>
+
+            <div class="detail-panel-backdrop" id="appDetailPanelBackdrop" hidden></div>
+
+            <div class="detail-panel-layer" aria-live="polite">
+              <section
+                class="panel panel-section detail-panel detail-panel-wide"
+                id="appDetailAppPanel"
+                aria-label="App 管理面板"
+                role="dialog"
+                aria-modal="true"
+                hidden
+              >
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">App Manager</p>
+                    <h2>App 管理</h2>
+                  </div>
+                  <div class="detail-panel-header-actions">
+                    <span class="panel-badge" id="appDetailAppCountBadge">0 个 App</span>
+                    <button
+                      class="ghost-button mini-button"
+                      type="button"
+                      data-app-detail-panel-close="app"
+                    >
+                      关闭
+                    </button>
+                  </div>
+                </div>
+
+                <p class="auth-copy" id="appFormCopy">
+                  先选择一个 App，或直接创建一个新的应用版本容器。
+                </p>
+
+                <form class="task-form" id="appForm">
+                  <input id="appIdInput" type="hidden" />
+
+                  <div class="field-grid">
+                    <label class="field" for="appNameInput">
+                      <span>App 名称</span>
+                      <input
+                        id="appNameInput"
+                        type="text"
+                        maxlength="80"
+                        placeholder="输入应用名称"
+                        required
+                      />
+                    </label>
+
+                    <label class="field" for="appColorInput">
+                      <span>主题颜色</span>
+                      <input id="appColorInput" type="color" value="#245a73" />
+                    </label>
+                  </div>
+
+                  <div class="field-grid">
+                    <label class="field" for="appPlatformInput">
+                      <span>平台</span>
+                      <select id="appPlatformInput">
+                        <option value="ios">iOS</option>
+                        <option value="android">Android</option>
+                        <option value="web">Web</option>
+                        <option value="miniapp">小程序</option>
+                        <option value="desktop">桌面端</option>
+                        <option value="service">服务端</option>
+                      </select>
+                    </label>
+
+                    <label class="field" for="appBundleIdInput">
+                      <span>包名 / 标识</span>
+                      <input
+                        id="appBundleIdInput"
+                        type="text"
+                        maxlength="120"
+                        placeholder="例如：com.taskatlas.app"
+                      />
+                    </label>
+                  </div>
+
+                  <label class="field" for="appDescriptionInput">
+                    <span>App 说明</span>
+                    <textarea
+                      id="appDescriptionInput"
+                      maxlength="600"
+                      placeholder="描述这个 App 的定位、端类型或版本策略"
+                    ></textarea>
+                  </label>
+
+                  <div class="form-actions">
+                    <button class="primary-button" id="appSubmitButton" type="submit">
+                      创建 App
+                    </button>
+                    <button class="ghost-button" id="appNewButton" type="button">
+                      新建 App
+                    </button>
+                    <button class="ghost-button" id="appArchiveButton" type="button">
+                      归档 App
+                    </button>
+                    <button class="danger-button" id="appDeleteButton" type="button">
+                      删除 App
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section
+                class="panel panel-section detail-panel"
+                id="appDetailVersionPanel"
+                aria-label="版本编辑面板"
+                role="dialog"
+                aria-modal="true"
+                hidden
+              >
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Version Editor</p>
+                    <h2>版本编辑</h2>
+                  </div>
+                  <div class="detail-panel-header-actions">
+                    <span class="panel-badge" id="versionEditorModeBadge">新版本</span>
+                    <button
+                      class="ghost-button mini-button"
+                      type="button"
+                      data-app-detail-panel-close="version"
+                    >
+                      关闭
+                    </button>
+                  </div>
+                </div>
+
+                <p class="auth-copy" id="versionAppHint">
+                  选择 App 后，在这里创建或编辑该应用下的版本记录。
+                </p>
+
+                <form class="task-form" id="versionForm">
+                  <input id="versionIdInput" type="hidden" />
+
+                  <div class="field-grid">
+                    <label class="field" for="versionNameInput">
+                      <span>版本号</span>
+                      <input
+                        id="versionNameInput"
+                        type="text"
+                        maxlength="60"
+                        placeholder="例如：2.4.0"
+                        required
+                      />
+                    </label>
+
+                    <label class="field" for="buildNumberInput">
+                      <span>构建号</span>
+                      <input
+                        id="buildNumberInput"
+                        type="text"
+                        maxlength="60"
+                        placeholder="例如：24015"
+                      />
+                    </label>
+                  </div>
+
+                  <label class="field" for="versionDescriptionInput">
+                    <span>版本说明</span>
+                    <textarea
+                      id="versionDescriptionInput"
+                      maxlength="1200"
+                      placeholder="说明这个版本的主要目标、范围或变更背景"
+                    ></textarea>
+                  </label>
+
+                  <label class="field" for="versionNotesInput">
+                    <span>发布备注</span>
+                    <textarea
+                      id="versionNotesInput"
+                      maxlength="2000"
+                      placeholder="补充发布风险、审核说明、灰度策略或上线注意事项"
+                    ></textarea>
+                  </label>
+
+                  <div class="field-grid">
+                    <label class="field" for="versionStatusInput">
+                      <span>版本状态</span>
+                      <select id="versionStatusInput">
+                        <option value="todo">待规划</option>
+                        <option value="doing">开发中</option>
+                        <option value="review">待发布</option>
+                        <option value="done">已发布</option>
+                      </select>
+                    </label>
+
+                    <label class="field" for="versionPriorityInput">
+                      <span>优先级</span>
+                      <select id="versionPriorityInput">
+                        <option value="low">低</option>
+                        <option value="medium">中</option>
+                        <option value="high">高</option>
+                        <option value="urgent">紧急</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="field-grid">
+                    <label class="field" for="versionChannelInput">
+                      <span>发布渠道</span>
+                      <select id="versionChannelInput">
+                        <option value="stable">正式发布</option>
+                        <option value="gray">灰度发布</option>
+                        <option value="beta">Beta</option>
+                        <option value="internal">内部包</option>
+                        <option value="hotfix">Hotfix</option>
+                      </select>
+                    </label>
+
+                    <label class="field" for="versionOwnerInput">
+                      <span>发布负责人</span>
+                      <input
+                        id="versionOwnerInput"
+                        type="text"
+                        maxlength="80"
+                        placeholder="输入负责人名称"
+                      />
+                    </label>
+                  </div>
+
+                  <div class="field-grid">
+                    <label class="field" for="plannedDateInput">
+                      <span>计划开始日期</span>
+                      <input id="plannedDateInput" type="date" />
+                    </label>
+
+                    <label class="field" for="releaseDateInput">
+                      <span>计划发布日期</span>
+                      <input id="releaseDateInput" type="date" />
+                    </label>
+                  </div>
+
+                  <label class="field" for="publishedDateInput">
+                    <span>实际发布日期</span>
+                    <input id="publishedDateInput" type="date" />
+                    <small class="field-hint">
+                      当版本状态为“已发布”时会保留该日期；改回其他状态时将自动清空。
+                    </small>
+                  </label>
+
+                  <div class="form-actions">
+                    <button class="primary-button" id="versionSubmitButton" type="submit">
+                      创建版本
+                    </button>
+                    <button class="ghost-button" id="versionResetButton" type="button">
+                      取消编辑
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
+
+            <section class="panel panel-section detail-task-list-panel" aria-label="应用版本列表">
+              <div class="section-heading">
+                <div>
+                  <p class="section-kicker">Version List</p>
+                  <h2>版本列表</h2>
+                </div>
+                <span class="panel-badge" id="versionListSummary">0 个版本</span>
+              </div>
+
+              <p class="auth-copy" id="appDetailCurrentMeta">
+                这里会列出当前 App 的全部版本、状态和发布时间信息。
+              </p>
+
+              <div class="detail-filter-grid">
+                <label class="field" for="versionSearchInput">
+                  <span>版本搜索</span>
+                  <input
+                    id="versionSearchInput"
+                    type="search"
+                    placeholder="按版本号、构建号、负责人、说明或备注搜索"
+                  />
+                </label>
+
+                <label class="field" for="versionStatusFilterInput">
+                  <span>状态筛选</span>
+                  <select id="versionStatusFilterInput">
+                    <option value="all">全部状态</option>
+                    <option value="todo">待规划</option>
+                    <option value="doing">开发中</option>
+                    <option value="review">待发布</option>
+                    <option value="done">已发布</option>
+                  </select>
+                </label>
+
+                <label class="field" for="versionChannelFilterInput">
+                  <span>渠道筛选</span>
+                  <select id="versionChannelFilterInput">
+                    <option value="all">全部渠道</option>
+                    <option value="stable">正式发布</option>
+                    <option value="gray">灰度发布</option>
+                    <option value="beta">Beta</option>
+                    <option value="internal">内部包</option>
+                    <option value="hotfix">Hotfix</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="bulk-action-row">
+                <button class="ghost-button" id="selectVisibleVersionsButton" type="button">
+                  选择当前结果
+                </button>
+
+                <span class="panel-badge" id="selectedVersionCountBadge">已选 0 项</span>
+
+                <label class="field compact-field" for="bulkVersionStatusInput">
+                  <span>批量状态</span>
+                  <select id="bulkVersionStatusInput">
+                    <option value="todo">待规划</option>
+                    <option value="doing">开发中</option>
+                    <option value="review">待发布</option>
+                    <option value="done">已发布</option>
+                  </select>
+                </label>
+
+                <button class="primary-button" id="applyBulkVersionStatusButton" type="button">
+                  应用到已选版本
+                </button>
+              </div>
+
+              <div class="task-record-list compact-task-record-list" id="versionDetailList"></div>
+            </section>
+          </section>
+
+          <section class="workspace-view" data-view="data" hidden>
+            <header class="topbar panel">
+              <div>
+                <p class="eyebrow">Data</p>
+                <h2>数据工具</h2>
+                <p class="topbar-copy">
+                  导入、导出、示例数据和浏览器本地数据清理。
+                </p>
+              </div>
+            </header>
+
+            <div class="overview-grid">
+              <section class="panel panel-section wide-span" aria-label="工作区状态">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Workspace Data</p>
+                    <h2>工作区状态</h2>
+                  </div>
+                  <span class="panel-badge" id="projectScopeBadge">当前无项目</span>
+                </div>
+
+                <p class="auth-copy">
+                  所有导入导出、演示载入和清理操作都在这里完成。当前项目只用于限定导出和清空已完成任务的范围。
+                </p>
+
+                <div class="tool-metrics">
+                  <article class="tool-metric-card">
+                    <span>当前项目</span>
+                    <strong id="dataCurrentProject">未选择</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>项目数量</span>
+                    <strong id="dataProjectCount">0</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>当前项目任务</span>
+                    <strong id="dataTaskCount">0</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>当前项目标签</span>
+                    <strong id="dataTagCount">0</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>应用数量</span>
+                    <strong id="dataAppCount">0</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>当前应用版本</span>
+                    <strong id="dataVersionCount">0</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>已完成任务</span>
+                    <strong id="dataDoneCount">0</strong>
+                  </article>
+                </div>
+
+                <div class="field">
+                  <span>当前项目</span>
+                  <select id="projectSelect" aria-label="选择当前项目">
+                    <option value="">暂无项目</option>
+                  </select>
+                </div>
+              </section>
+
+              <section class="panel panel-section" aria-label="导入与导出">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Import / Export</p>
+                    <h2>导入与导出</h2>
+                  </div>
+                </div>
+
+                <div class="action-grid">
+                  <article class="tool-action-card">
+                    <div class="tool-action-head">
+                      <h3>载入示例数据</h3>
+                      <p>快速创建一组可用项目和任务，用于验证导入导出与同步流程。</p>
+                    </div>
+                    <button class="primary-button" id="loadDemoButton" type="button">
+                      载入示例
+                    </button>
+                  </article>
+
+                  <article class="tool-action-card">
+                    <div class="tool-action-head">
+                      <h3>导入 JSON</h3>
+                      <p>游客模式写入浏览器本地，账号模式写入当前登录账号的云端工作区。</p>
+                    </div>
+                    <button class="ghost-button" id="importJsonButton" type="button">
+                      导入 JSON
+                    </button>
+                  </article>
+
+                  <article class="tool-action-card">
+                    <div class="tool-action-head">
+                      <h3>导出当前项目</h3>
+                      <p>只导出当前项目，便于备份、迁移或分享单个项目数据。</p>
+                    </div>
+                    <button class="ghost-button" id="exportJsonButton" type="button">
+                      导出 JSON
+                    </button>
+                  </article>
+                </div>
+              </section>
+
+              <section class="panel panel-section" aria-label="清理操作">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Cleanup</p>
+                    <h2>清理操作</h2>
+                  </div>
+                </div>
+
+                <div class="action-grid">
+                  <article class="tool-action-card">
+                    <div class="tool-action-head">
+                      <h3>清空当前项目已完成任务</h3>
+                      <p>只清理当前项目中状态为 `done` 的任务，不影响其他项目。</p>
+                    </div>
+                    <button class="danger-button" id="clearDoneButton" type="button">
+                      清空已完成
+                    </button>
+                  </article>
+
+                  <article class="tool-action-card">
+                    <div class="tool-action-head">
+                      <h3>清空游客本地数据</h3>
+                      <p>删除当前浏览器保存的游客数据，不会影响已经登录账号的云端数据。</p>
+                    </div>
+                    <button class="danger-button" id="clearGuestDataButton" type="button">
+                      清空游客数据
+                    </button>
+                  </article>
+                </div>
+              </section>
+
+              <section class="panel panel-section wide-span" aria-label="数据说明">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Data Notes</p>
+                    <h2>数据说明</h2>
+                  </div>
+                </div>
+
+                <p class="auth-copy" id="dataGuestSummary">
+                  当前浏览器中的游客模式数据会在这里汇总，并用于后续账号导入同步。
+                </p>
+
+                <ul class="tips-list">
+                  <li>导出只针对当前项目，执行前请先确认项目选择器指向正确项目。</li>
+                  <li>工作区导入导出会同时包含任务项目和 App 版本数据，不会把两块内容混在一条记录里。</li>
+                  <li>导入 JSON 时不会覆盖整库，而是把 JSON 内容追加到当前工作区。</li>
+                  <li>游客模式与账号模式的数据是分离的，登录后不会自动合并本地数据。</li>
+                  <li>如果需要把游客数据写入当前账号，请切到“账号与同步”页面显式执行导入。</li>
+                </ul>
+              </section>
+            </div>
+          </section>
+
+          <section class="workspace-view" data-view="utilities" hidden>
+            <header class="topbar panel">
+              <div>
+                <p class="eyebrow">Utilities</p>
+                <h2>常用工具</h2>
+                <p class="topbar-copy">
+                  把高频的快捷操作、摘要复制和工作区快照整理到一起，减少来回切换页面的成本。
+                </p>
+              </div>
+            </header>
+
+            <div class="overview-grid">
+              <section class="panel panel-section wide-span" aria-label="工具上下文">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Utility Context</p>
+                    <h2>当前工具上下文</h2>
+                  </div>
+                </div>
+
+                <p class="auth-copy" id="utilityContextCopy">
+                  这里会根据当前工作区和项目，提供可直接执行的高频快捷工具。
+                </p>
+
+                <div class="tool-metrics">
+                  <article class="tool-metric-card">
+                    <span>工作模式</span>
+                    <strong id="utilityWorkspaceMode">游客本地模式</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>当前项目</span>
+                    <strong id="utilityCurrentProject">未选择</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>当前项目任务</span>
+                    <strong id="utilityTaskCount">0</strong>
+                  </article>
+                  <article class="tool-metric-card">
+                    <span>当前待完成</span>
+                    <strong id="utilityPendingTaskCount">0</strong>
+                  </article>
+                </div>
+              </section>
+
+              <section class="panel panel-section" aria-label="快捷操作">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Quick Actions</p>
+                    <h2>快捷操作</h2>
+                  </div>
+                </div>
+
+                <div class="action-grid">
+                  <article class="tool-action-card">
+                    <div class="tool-action-head">
+                      <h3>刷新当前工作区</h3>
+                      <p>重新同步当前工作区内容，适合在导入、登录切换或连续编辑后快速校对页面状态。</p>
+                    </div>
+                    <button class="ghost-button" id="refreshWorkspaceButton" type="button">
+                      刷新工作区
+                    </button>
+                  </article>
+
+                  <article class="tool-action-card">
+                    <div class="tool-action-head">
+                      <h3>打开当前项目详情</h3>
+                      <p>直接跳转到当前项目的任务详情页，继续处理任务列表、筛选和编辑操作。</p>
+                    </div>
+                    <button
+                      class="primary-button"
+                      id="openCurrentProjectDetailsButton"
+                      type="button"
+                    >
+                      打开任务详情
+                    </button>
+                  </article>
+                </div>
+              </section>
+
+              <section class="panel panel-section" aria-label="摘要复制">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Copy Helpers</p>
+                    <h2>摘要复制</h2>
+                  </div>
+                </div>
+
+                <div class="utility-action-grid">
+                  <article class="tool-action-card">
+                    <div class="tool-action-head">
+                      <h3>复制工作区摘要</h3>
+                      <p>生成适合发消息、写日报或同步给同事的项目和任务统计摘要。</p>
+                    </div>
+                    <button class="ghost-button" id="copyWorkspaceSummaryButton" type="button">
+                      复制工作区摘要
+                    </button>
+                  </article>
+
+                  <article class="tool-action-card">
+                    <div class="tool-action-head">
+                      <h3>复制当前项目摘要</h3>
+                      <p>快速复制当前项目的说明、状态分布和任务总数，便于单项目同步。</p>
+                    </div>
+                    <button class="ghost-button" id="copyProjectSummaryButton" type="button">
+                      复制项目摘要
+                    </button>
+                  </article>
+
+                  <article class="tool-action-card">
+                    <div class="tool-action-head">
+                      <h3>复制未完成任务清单</h3>
+                      <p>把当前项目中未完成的任务整理成清单，适合发到群里或贴进待办文档。</p>
+                    </div>
+                    <button class="ghost-button" id="copyPendingTaskListButton" type="button">
+                      复制待办清单
+                    </button>
+                  </article>
+
+                  <article class="tool-action-card">
+                    <div class="tool-action-head">
+                      <h3>复制当前项目 JSON</h3>
+                      <p>快速复制当前项目的结构化 JSON，便于临时分享、排查或留档。</p>
+                    </div>
+                    <button class="ghost-button" id="copyProjectJsonButton" type="button">
+                      复制项目 JSON
+                    </button>
+                  </article>
+                </div>
+              </section>
+
+              <section class="panel panel-section wide-span" aria-label="导出快照">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Snapshot Export</p>
+                    <h2>导出快照</h2>
+                  </div>
+                </div>
+
+                <div class="utility-action-grid">
+                  <article class="tool-action-card">
+                    <div class="tool-action-head">
+                      <h3>导出整个工作区</h3>
+                      <p>一次导出当前工作区的全部项目、任务和标签，适合完整备份、迁移或归档。</p>
+                    </div>
+                    <button class="ghost-button" id="exportWorkspaceButton" type="button">
+                      导出工作区
+                    </button>
+                  </article>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section class="workspace-view" data-view="account" hidden>
+            <header class="topbar panel">
+              <div>
+                <p class="eyebrow">Account</p>
+                <h2>账号与同步</h2>
+                <p class="topbar-copy">
+                  登录、管理会话，并把游客模式数据显式导入当前账号。
+                </p>
+              </div>
+            </header>
+
+            <div class="detail-grid">
+              <section class="panel panel-section auth-panel" aria-label="账号状态">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Account Session</p>
+                    <h2>账号状态</h2>
+                  </div>
+                </div>
+
+                <p class="auth-copy" id="authCopy">
+                  当前未登录，数据工具会使用浏览器本地游客工作区。登录后将切换为账号云端模式。
+                </p>
+
+                <div class="auth-mode-switch" role="tablist" aria-label="账号模式切换">
+                  <button
+                    class="ghost-button auth-mode-button is-active"
+                    type="button"
+                    data-auth-mode="login"
+                  >
+                    登录
+                  </button>
+                  <button
+                    class="ghost-button auth-mode-button"
+                    type="button"
+                    data-auth-mode="register"
+                  >
+                    注册
+                  </button>
+                </div>
+
+                <form class="task-form" id="authForm">
+                  <div class="field-grid">
+                    <label class="field" for="authUsernameInput">
+                      <span>用户名</span>
+                      <input
+                        id="authUsernameInput"
+                        name="username"
+                        type="text"
+                        autocomplete="username"
+                        placeholder="输入用户名"
+                        required
+                      />
+                    </label>
+
+                    <label class="field" for="authPasswordInput">
+                      <span>密码</span>
+                      <input
+                        id="authPasswordInput"
+                        name="password"
+                        type="password"
+                        autocomplete="current-password"
+                        placeholder="输入密码"
+                        required
+                      />
+                    </label>
+                  </div>
+
+                  <div class="form-actions">
+                    <button class="primary-button" id="authSubmitButton" type="submit">
+                      登录账号
+                    </button>
+                  </div>
+                </form>
+
+                <div class="auth-user-card" id="authUserCard" hidden>
+                  <div>
+                    <strong id="authUsernameLabel">当前账号</strong>
+                    <p class="auth-copy" id="authWorkspaceCopy">
+                      账号会话已建立，正在连接云端工作区。
+                    </p>
+                  </div>
+
+                  <div class="form-actions">
+                    <button class="ghost-button" id="refreshSessionButton" type="button">
+                      刷新会话
+                    </button>
+                    <button class="danger-button" id="logoutButton" type="button">
+                      退出登录
+                    </button>
+                  </div>
+                </div>
+
+                <div class="detail-subsection">
+                  <div class="section-heading section-heading-compact">
+                    <div>
+                      <p class="section-kicker">Appearance</p>
+                      <h2>界面模式</h2>
+                    </div>
+                  </div>
+
+                  <p class="auth-copy" id="themeModeCopy">
+                    当前使用白天模式，适合明亮环境下浏览任务和账号信息。
+                  </p>
+
+                  <div class="theme-mode-switch" aria-label="界面模式切换">
+                    <button
+                      class="ghost-button theme-mode-button is-active"
+                      id="themeDayButton"
+                      type="button"
+                      data-theme-mode="day"
+                    >
+                      白天
+                    </button>
+                    <button
+                      class="ghost-button theme-mode-button"
+                      id="themeNightButton"
+                      type="button"
+                      data-theme-mode="night"
+                    >
+                      晚上
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="panel panel-section" aria-label="游客数据同步">
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Guest Import</p>
+                    <h2>游客数据导入云端</h2>
+                  </div>
+                </div>
+
+                <div class="sync-panel" id="syncPanel">
+                  <p class="sync-copy" id="syncMessage">
+                    登录后可以把浏览器中的游客模式数据显式导入当前账号。
+                  </p>
+                  <button class="primary-button" id="importGuestButton" type="button">
+                    导入游客数据
+                  </button>
+                </div>
+
+                <ul class="tips-list">
+                  <li>游客数据导入是手动操作，不会在登录时自动触发。</li>
+                  <li>导入完成后，本地副本仍会保留，是否清理由你在“数据工具”页决定。</li>
+                  <li>如果当前浏览器没有游客数据，按钮会自动禁用。</li>
+                </ul>
+              </section>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <input id="jsonImportInput" type="file" accept="application/json,.json" hidden />
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

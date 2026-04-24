@@ -1,0 +1,20 @@
+{
+  "name": "task-atlas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A web-based task management tool with native frontend and Node.js backend.",
+  "main": "server/app.js",
+  "scripts": {
+    "check": "node --check public/app.js && node --check server/app.js && node --check server/routes/auth.js && node --check server/routes/workspace.js && node --check server/routes/apps.js && node --check server/services/auth-service.js && node --check server/services/workspace-service.js && node --check server/services/app-version-service.js",
+    "dev": "node --watch server/app.js",
+    "seed:demo": "node scripts/seed-demo.js",
+    "start": "node server/app.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
