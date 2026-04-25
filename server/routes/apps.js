@@ -11,7 +11,7 @@ const {
   getAppOverview,
   getBoardForApp,
   importAppData,
-  listAppsForUser,
+  listAppsByProject,
   updateApp,
   updateVersion,
 } = require("../services/app-version-service");
@@ -20,14 +20,14 @@ const router = express.Router();
 
 router.use(requireAuth);
 
-router.get("/apps", (req, res) => {
+router.get("/projects/:projectId/apps", (req, res) => {
   res.json({
-    apps: listAppsForUser(req.auth.user.id),
+    apps: listAppsByProject(req.auth.user.id, req.params.projectId),
   });
 });
 
-router.get("/apps/overview", (req, res) => {
-  res.json(getAppOverview(req.auth.user.id));
+router.get("/projects/:projectId/apps/overview", (req, res) => {
+  res.json(getAppOverview(req.auth.user.id, req.params.projectId));
 });
 
 router.post("/apps/import/json", (req, res) => {
@@ -35,8 +35,8 @@ router.post("/apps/import/json", (req, res) => {
   res.status(201).json(result);
 });
 
-router.post("/apps", (req, res) => {
-  const app = createApp(req.auth.user.id, req.body || {});
+router.post("/projects/:projectId/apps", (req, res) => {
+  const app = createApp(req.auth.user.id, req.params.projectId, req.body || {});
   res.status(201).json({ app });
 });
 
@@ -50,22 +50,32 @@ router.delete("/apps/:appId", (req, res) => {
   res.status(204).end();
 });
 
-router.get("/apps/:appId/board", (req, res) => {
-  res.json(getBoardForApp(req.auth.user.id, req.params.appId));
+router.get("/projects/:projectId/apps/:appId/board", (req, res) => {
+  res.json(getBoardForApp(req.auth.user.id, req.params.projectId, req.params.appId));
 });
 
-router.post("/apps/:appId/versions", (req, res) => {
-  const version = createVersion(req.auth.user.id, req.params.appId, req.body || {});
+router.post("/projects/:projectId/apps/:appId/versions", (req, res) => {
+  const version = createVersion(
+    req.auth.user.id,
+    req.params.projectId,
+    req.params.appId,
+    req.body || {}
+  );
   res.status(201).json({ version });
 });
 
-router.patch("/apps/:appId/versions", (req, res) => {
-  const result = bulkUpdateVersions(req.auth.user.id, req.params.appId, req.body || {});
+router.patch("/projects/:projectId/apps/:appId/versions", (req, res) => {
+  const result = bulkUpdateVersions(
+    req.auth.user.id,
+    req.params.projectId,
+    req.params.appId,
+    req.body || {}
+  );
   res.json(result);
 });
 
-router.get("/apps/:appId/export", (req, res) => {
-  res.json(exportApp(req.auth.user.id, req.params.appId));
+router.get("/projects/:projectId/apps/:appId/export", (req, res) => {
+  res.json(exportApp(req.auth.user.id, req.params.projectId, req.params.appId));
 });
 
 router.patch("/app-versions/:versionId", (req, res) => {

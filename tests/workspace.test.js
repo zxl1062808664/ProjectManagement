@@ -221,6 +221,50 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(bulkUpdateResponse.body.tasks[1].status, "done");
     assert.match(bulkUpdateResponse.body.tasks[1].completedDate, /^\d{4}-\d{2}-\d{2}$/);
 
+    const createdAppResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/apps`,
+      {
+        method: "POST",
+        cookie: sessionCookie,
+        body: {
+          name: "官网运营台",
+          description: "项目配套运营后台",
+          color: "#245a73",
+          platform: "web",
+          bundleId: "com.taskatlas.ops",
+        },
+      }
+    );
+    const createdApp = createdAppResponse.body.app;
+
+    assert.equal(createdAppResponse.status, 201);
+    assert.equal(createdApp.projectId, createdProject.id);
+    assert.equal(createdApp.platform, "web");
+
+    const createdVersionResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/apps/${createdApp.id}/versions`,
+      {
+        method: "POST",
+        cookie: sessionCookie,
+        body: {
+          versionName: "1.2.0",
+          buildNumber: "12005",
+          description: "同步项目导出里的版本信息",
+          owner: "Ava",
+          channel: "beta",
+          status: "review",
+          priority: "medium",
+          plannedDate: "2026-04-30",
+        },
+      }
+    );
+
+    assert.equal(createdVersionResponse.status, 201);
+    assert.equal(createdVersionResponse.body.version.projectId, createdProject.id);
+    assert.equal(createdVersionResponse.body.version.versionName, "1.2.0");
+
     const overviewResponse = await request(baseUrl, "/api/projects/overview", {
       cookie: sessionCookie,
     });
@@ -228,8 +272,15 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(overviewResponse.status, 200);
     assert.equal(overviewResponse.body.totals.projectCount, 2);
     assert.equal(overviewResponse.body.totals.taskCount, 2);
+    assert.equal(overviewResponse.body.totals.appCount, 1);
+    assert.equal(overviewResponse.body.totals.versionCount, 1);
     assert.equal(overviewResponse.body.totals.doneCount, 2);
-    assert.equal(overviewResponse.body.projects[0].recentTasks.length, 2);
+    const createdProjectSummary = overviewResponse.body.projects.find(
+      (project) => project.id === createdProject.id
+    );
+    assert.equal(createdProjectSummary.recentTasks.length, 2);
+    assert.equal(createdProjectSummary.appCount, 1);
+    assert.equal(createdProjectSummary.versionCount, 1);
 
     const boardResponse = await request(
       baseUrl,
@@ -257,6 +308,7 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     const exportPayload = exportResponse.body;
 
     assert.equal(exportResponse.status, 200);
+    assert.equal(exportPayload.version, 4);
     assert.equal(exportPayload.scope, "project");
     assert.equal(exportPayload.project.name, "官网改版");
     assert.equal(exportPayload.tags[0].name, "前端联调");
@@ -267,6 +319,10 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.match(exportedTask.completedDate, /^\d{4}-\d{2}-\d{2}$/);
     assert.equal(exportedTask.tagNames[0], "前端联调");
     assert.equal(exportedTask.subtasks.length, 2);
+    assert.equal(exportPayload.apps.length, 1);
+    assert.equal(exportPayload.apps[0].app.name, "官网运营台");
+    assert.equal(exportPayload.apps[0].versions.length, 1);
+    assert.equal(exportPayload.apps[0].versions[0].versionName, "1.2.0");
 
     const clearCompletedResponse = await request(
       baseUrl,
@@ -294,13 +350,14 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
 
     assert.equal(importedProjectResponse.status, 201);
     assert.equal(importedProjectResponse.body.importedCount, 1);
+    assert.equal(importedProjectResponse.body.importedAppCount, 1);
 
     const workspaceImportResponse = await request(baseUrl, "/api/import/json", {
       method: "POST",
       cookie: sessionCookie,
       body: {
         source: "task-atlas",
-        version: 2,
+        version: 4,
         scope: "workspace",
         projects: [
           {
@@ -323,6 +380,29 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
                 subtasks: [{ title: "列出环境变量", completed: false }],
               },
             ],
+            apps: [
+              {
+                app: {
+                  name: "交付工作台",
+                  description: "来自工作区 JSON 的配套应用",
+                  color: "#245a73",
+                  platform: "web",
+                  bundleId: "taskatlas.delivery.web",
+                  archived: false,
+                },
+                versions: [
+                  {
+                    versionName: "0.9.0",
+                    buildNumber: "09002",
+                    description: "导入时同时补齐版本数据",
+                    owner: "Mika",
+                    channel: "internal",
+                    status: "doing",
+                    priority: "medium",
+                  },
+                ],
+              },
+            ],
           },
         ],
       },
@@ -330,6 +410,7 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
 
     assert.equal(workspaceImportResponse.status, 201);
     assert.equal(workspaceImportResponse.body.importedCount, 1);
+    assert.equal(workspaceImportResponse.body.importedAppCount, 1);
 
     const importedWorkspaceProjectId =
       workspaceImportResponse.body.importedProjects[0].id;
@@ -348,6 +429,30 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(importedBoardResponse.body.tasks.length, 1);
     assert.equal(importedBoardResponse.body.tasks[0].subtasks.length, 1);
     assert.equal(importedBoardResponse.body.tasks[0].notes, "上线前和运维确认变量命名。");
+
+    const importedAppsResponse = await request(
+      baseUrl,
+      `/api/projects/${importedWorkspaceProjectId}/apps`,
+      {
+        cookie: sessionCookie,
+      }
+    );
+
+    assert.equal(importedAppsResponse.status, 200);
+    assert.equal(importedAppsResponse.body.apps.length, 1);
+    assert.equal(importedAppsResponse.body.apps[0].name, "交付工作台");
+
+    const importedAppBoardResponse = await request(
+      baseUrl,
+      `/api/projects/${importedWorkspaceProjectId}/apps/${importedAppsResponse.body.apps[0].id}/board`,
+      {
+        cookie: sessionCookie,
+      }
+    );
+
+    assert.equal(importedAppBoardResponse.status, 200);
+    assert.equal(importedAppBoardResponse.body.versions.length, 1);
+    assert.equal(importedAppBoardResponse.body.versions[0].versionName, "0.9.0");
 
     const deleteTaskResponse = await request(
       baseUrl,

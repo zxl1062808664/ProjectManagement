@@ -14,10 +14,28 @@ const VALID_APP_PLATFORMS = new Set([
 ]);
 const VALID_CHANNELS = new Set(["stable", "gray", "beta", "internal", "hotfix"]);
 
+const selectProjectByIdForUserStatement = db.prepare(`
+  SELECT id, user_id, name, description, color, archived, created_at, updated_at
+  FROM projects
+  WHERE id = ? AND user_id = ?
+`);
+
+const insertProjectStatement = db.prepare(`
+  INSERT INTO projects (id, user_id, name, description, color, archived, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`);
+
+const updateProjectTimestampStatement = db.prepare(`
+  UPDATE projects
+  SET updated_at = ?
+  WHERE id = ?
+`);
+
 const selectAppsByUserStatement = db.prepare(`
   SELECT
     id,
     user_id,
+    project_id,
     name,
     description,
     color,
@@ -31,10 +49,29 @@ const selectAppsByUserStatement = db.prepare(`
   ORDER BY archived ASC, updated_at DESC, created_at DESC
 `);
 
+const selectAppsByProjectStatement = db.prepare(`
+  SELECT
+    id,
+    user_id,
+    project_id,
+    name,
+    description,
+    color,
+    platform,
+    bundle_id,
+    archived,
+    created_at,
+    updated_at
+  FROM apps
+  WHERE user_id = ? AND project_id = ?
+  ORDER BY archived ASC, updated_at DESC, created_at DESC
+`);
+
 const selectAppByIdStatement = db.prepare(`
   SELECT
     id,
     user_id,
+    project_id,
     name,
     description,
     color,
@@ -47,10 +84,28 @@ const selectAppByIdStatement = db.prepare(`
   WHERE id = ? AND user_id = ?
 `);
 
+const selectAppByIdAnyUserStatement = db.prepare(`
+  SELECT
+    id,
+    user_id,
+    project_id,
+    name,
+    description,
+    color,
+    platform,
+    bundle_id,
+    archived,
+    created_at,
+    updated_at
+  FROM apps
+  WHERE id = ?
+`);
+
 const insertAppStatement = db.prepare(`
   INSERT INTO apps (
     id,
     user_id,
+    project_id,
     name,
     description,
     color,
@@ -60,12 +115,13 @@ const insertAppStatement = db.prepare(`
     created_at,
     updated_at
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 const updateAppStatement = db.prepare(`
   UPDATE apps
   SET
+    project_id = ?,
     name = ?,
     description = ?,
     color = ?,
@@ -79,6 +135,11 @@ const updateAppStatement = db.prepare(`
 const deleteAppStatement = db.prepare(`
   DELETE FROM apps
   WHERE id = ? AND user_id = ?
+`);
+
+const deleteAppsByProjectStatement = db.prepare(`
+  DELETE FROM apps
+  WHERE project_id = ? AND user_id = ?
 `);
 
 const selectVersionsByAppStatement = db.prepare(`
@@ -108,6 +169,7 @@ const selectVersionByIdForUserStatement = db.prepare(`
   SELECT
     app_versions.id,
     app_versions.app_id,
+    apps.project_id,
     app_versions.version_name,
     app_versions.build_number,
     app_versions.description,
@@ -184,12 +246,24 @@ const selectMaxPositionByAppStatement = db.prepare(`
   WHERE app_id = ?
 `);
 
-function listAppsForUser(userId) {
+function listAppsForUser(userId, options = {}) {
+  const { projectId = null } = options;
+
+  if (projectId) {
+    getProjectOrThrow(userId, projectId);
+    return selectAppsByProjectStatement.all(userId, projectId).map(mapApp);
+  }
+
   return selectAppsByUserStatement.all(userId).map(mapApp);
 }
 
-function getAppOverview(userId) {
-  const apps = listAppsForUser(userId);
+function listAppsByProject(userId, projectId) {
+  return listAppsForUser(userId, { projectId });
+}
+
+function getAppOverview(userId, projectId) {
+  const project = getProjectOrThrow(userId, projectId);
+  const apps = listAppsByProject(userId, project.id);
   const totals = createEmptyVersionStatusSummary();
 
   const appSummaries = apps.map((app) => {
@@ -222,6 +296,7 @@ function getAppOverview(userId) {
   });
 
   return {
+    project,
     totals: {
       ...totals,
       appCount: apps.length,
@@ -232,12 +307,14 @@ function getAppOverview(userId) {
   };
 }
 
-function getBoardForApp(userId, appId) {
-  const apps = listAppsForUser(userId);
+function getBoardForApp(userId, projectId, appId) {
+  const project = getProjectOrThrow(userId, projectId);
+  const apps = listAppsByProject(userId, project.id);
   const selectedApp = resolveSelectedApp(apps, appId);
 
   if (!selectedApp) {
     return {
+      project,
       apps,
       app: null,
       versions: [],
@@ -245,17 +322,20 @@ function getBoardForApp(userId, appId) {
   }
 
   return {
+    project,
     apps,
     app: selectedApp,
     versions: listVersionsByApp(selectedApp.id),
   };
 }
 
-function createApp(userId, payload = {}) {
+function createApp(userId, projectId, payload = {}) {
+  const project = getProjectOrThrow(userId, projectId);
   const now = new Date().toISOString();
   const app = {
     id: createId(),
     userId,
+    projectId: project.id,
     name: validateAppName(payload.name),
     description: normalizeText(payload.description, 600),
     color: normalizeColor(payload.color, "#245a73"),
@@ -274,6 +354,7 @@ function createApp(userId, payload = {}) {
   insertAppStatement.run(
     app.id,
     app.userId,
+    app.projectId,
     app.name,
     app.description,
     app.color,
@@ -284,13 +365,21 @@ function createApp(userId, payload = {}) {
     app.updatedAt
   );
 
+  touchProject(app.projectId, app.updatedAt);
+
   return getAppOrThrow(userId, app.id);
 }
 
 function updateApp(userId, appId, payload = {}) {
   const currentApp = getAppOrThrow(userId, appId);
+  const nextProjectId =
+    payload.projectId === undefined
+      ? currentApp.projectId
+      : getProjectOrThrow(userId, payload.projectId).id;
+
   const updatedApp = {
     ...currentApp,
+    projectId: nextProjectId,
     name: payload.name === undefined ? currentApp.name : validateAppName(payload.name),
     description:
       payload.description === undefined
@@ -319,6 +408,7 @@ function updateApp(userId, appId, payload = {}) {
   };
 
   updateAppStatement.run(
+    updatedApp.projectId,
     updatedApp.name,
     updatedApp.description,
     updatedApp.color,
@@ -330,16 +420,29 @@ function updateApp(userId, appId, payload = {}) {
     userId
   );
 
+  if (currentApp.projectId !== updatedApp.projectId) {
+    touchProject(currentApp.projectId, updatedApp.updatedAt);
+  }
+  touchProject(updatedApp.projectId, updatedApp.updatedAt);
+
   return getAppOrThrow(userId, appId);
 }
 
 function deleteApp(userId, appId) {
-  getAppOrThrow(userId, appId);
+  const currentApp = getAppOrThrow(userId, appId);
   deleteAppStatement.run(appId, userId);
+  touchProject(currentApp.projectId);
 }
 
-function createVersion(userId, appId, payload = {}) {
+function deleteAppsByProject(userId, projectId) {
+  getProjectOrThrow(userId, projectId);
+  deleteAppsByProjectStatement.run(projectId, userId);
+  touchProject(projectId);
+}
+
+function createVersion(userId, projectId, appId, payload = {}) {
   const app = getAppOrThrow(userId, appId);
+  assertAppBelongsToProject(app, projectId);
   const normalizedVersion = normalizeVersionInput(app.id, payload);
   return persistVersionRecord(userId, app.id, normalizedVersion);
 }
@@ -391,13 +494,16 @@ function updateVersion(userId, versionId, payload = {}) {
     versionId
   );
 
+  touchProject(currentVersion.projectId, updatedAt);
+
   return getVersionOrThrow(userId, versionId);
 }
 
-function bulkUpdateVersions(userId, appId, payload = {}) {
-  getAppOrThrow(userId, appId);
+function bulkUpdateVersions(userId, projectId, appId, payload = {}) {
+  const app = getAppOrThrow(userId, appId);
+  assertAppBelongsToProject(app, projectId);
 
-  const versionIds = normalizeBulkVersionIds(appId, payload.versionIds);
+  const versionIds = normalizeBulkVersionIds(app.id, payload.versionIds);
   const nextStatus = normalizeEnum(
     payload.status,
     VALID_STATUSES,
@@ -418,6 +524,8 @@ function bulkUpdateVersions(userId, appId, payload = {}) {
     return getVersionOrThrow(userId, versionId);
   });
 
+  touchProject(app.projectId, updatedAt);
+
   return {
     updatedCount: versions.length,
     versions,
@@ -425,44 +533,45 @@ function bulkUpdateVersions(userId, appId, payload = {}) {
 }
 
 function deleteVersion(userId, versionId) {
-  getVersionOrThrow(userId, versionId);
+  const currentVersion = getVersionOrThrow(userId, versionId);
   deleteVersionStatement.run(versionId);
+  touchProject(currentVersion.projectId);
 }
 
-function exportApp(userId, appId) {
-  const board = getBoardForApp(userId, appId);
+function exportApp(userId, projectId, appId) {
+  const board = getBoardForApp(userId, projectId, appId);
   if (!board.app) {
     throw createHttpError(404, "APP_NOT_FOUND", "应用不存在");
   }
 
   return {
     source: "task-atlas",
-    version: 3,
+    version: 4,
     scope: "app",
     exportedAt: new Date().toISOString(),
-    app: {
-      name: board.app.name,
-      description: board.app.description,
-      color: board.app.color,
-      platform: board.app.platform,
-      bundleId: board.app.bundleId,
-      archived: board.app.archived,
+    project: {
+      name: board.project.name,
+      description: board.project.description,
+      color: board.project.color,
+      archived: board.project.archived,
     },
-    versions: board.versions.map((item) => ({
-      versionName: item.versionName,
-      buildNumber: item.buildNumber,
-      description: item.description,
-      notes: item.notes,
-      owner: item.owner,
-      channel: item.channel,
-      status: item.status,
-      priority: item.priority,
-      plannedDate: item.plannedDate,
-      releaseDate: item.releaseDate,
-      publishedDate: item.publishedDate,
-      position: item.position,
-    })),
+    ...buildAppExportEntry(board.app),
   };
+}
+
+function exportAppsByProject(userId, projectId) {
+  const apps = listAppsByProject(userId, projectId);
+  return apps.map((app) => buildAppExportEntry(app));
+}
+
+function importAppsIntoProject(userId, projectId, appPayloads = []) {
+  getProjectOrThrow(userId, projectId);
+
+  if (!Array.isArray(appPayloads)) {
+    return [];
+  }
+
+  return appPayloads.map((appPayload) => importAppPayload(userId, projectId, appPayload));
 }
 
 function importAppData(userId, payload = {}) {
@@ -471,36 +580,87 @@ function importAppData(userId, payload = {}) {
   }
 
   return runTransaction(() => {
-    if (payload.scope === "workspace") {
-      const appPayloads = Array.isArray(payload.apps) ? payload.apps : [];
-      const importedApps = appPayloads.map((appPayload) => importAppPayload(userId, appPayload));
+    if (payload.scope === "workspace" && Array.isArray(payload.projects)) {
+      const importedApps = [];
+      const importedProjects = [];
+
+      payload.projects.forEach((projectPayload) => {
+        const result = importProjectScopedApps(userId, projectPayload);
+        if (result.project) {
+          importedProjects.push(result.project);
+        }
+        importedApps.push(...result.importedApps);
+      });
 
       return {
+        importedProjects,
         importedApps,
         importedCount: importedApps.length,
       };
     }
 
-    if ((payload.scope === "app" || payload.app) && payload.app) {
-      const importedApp = importAppPayload(userId, payload);
+    if ((payload.scope === "app" || (!payload.scope && payload.app)) && payload.app) {
+      const standaloneProject = createStandaloneImportProject(userId, payload.project, payload);
+      const importedApp = importAppPayload(userId, standaloneProject.id, payload);
       return {
+        importedProjects: [standaloneProject],
         importedApps: [importedApp],
         importedCount: 1,
       };
     }
 
+    if (
+      (payload.scope === "project" ||
+        (!payload.scope && payload.project && Array.isArray(payload.apps))) &&
+      payload.project
+    ) {
+      const result = importProjectScopedApps(userId, payload);
+      return {
+        importedProjects: result.project ? [result.project] : [],
+        importedApps: result.importedApps,
+        importedCount: result.importedApps.length,
+      };
+    }
+
+    if (payload.scope === "workspace" && Array.isArray(payload.apps)) {
+      const standaloneProject = createStandaloneImportProject(userId, payload.project);
+      const importedApps = importAppsIntoProject(userId, standaloneProject.id, payload.apps);
+      return {
+        importedProjects: [standaloneProject],
+        importedApps,
+        importedCount: importedApps.length,
+      };
+    }
+
     return {
+      importedProjects: [],
       importedApps: [],
       importedCount: 0,
     };
   });
 }
 
-function importAppPayload(userId, payload) {
+function importProjectScopedApps(userId, payload) {
+  const apps = Array.isArray(payload.apps) ? payload.apps : [];
+  const projectData = payload.project || payload;
+  const project = createProjectRecord(userId, {
+    name: projectData.name || inferProjectNameFromApps(apps),
+    description: projectData.description || "",
+    color: projectData.color || "#c16b39",
+    archived: normalizeBoolean(projectData.archived),
+  });
+
+  return {
+    project,
+    importedApps: importAppsIntoProject(userId, project.id, apps),
+  };
+}
+
+function importAppPayload(userId, projectId, payload) {
   const appData = payload.app || payload;
   const versions = Array.isArray(payload.versions) ? payload.versions : [];
 
-  const createdApp = createApp(userId, {
+  const createdApp = createApp(userId, projectId, {
     name: appData.name || "导入应用",
     description: appData.description || "",
     color: appData.color || "#245a73",
@@ -536,6 +696,79 @@ function listVersionsByApp(appId) {
   return selectVersionsByAppStatement.all(appId).map(mapVersionRow);
 }
 
+function buildAppExportEntry(app) {
+  return {
+    app: {
+      name: app.name,
+      description: app.description,
+      color: app.color,
+      platform: app.platform,
+      bundleId: app.bundleId,
+      archived: app.archived,
+    },
+    versions: listVersionsByApp(app.id).map((item) => ({
+      versionName: item.versionName,
+      buildNumber: item.buildNumber,
+      description: item.description,
+      notes: item.notes,
+      owner: item.owner,
+      channel: item.channel,
+      status: item.status,
+      priority: item.priority,
+      plannedDate: item.plannedDate,
+      releaseDate: item.releaseDate,
+      publishedDate: item.publishedDate,
+      position: item.position,
+    })),
+  };
+}
+
+function createProjectRecord(userId, payload = {}) {
+  const now = new Date().toISOString();
+  const project = {
+    id: createId(),
+    userId,
+    name: validateProjectName(payload.name || "导入项目"),
+    description: normalizeText(payload.description, 600),
+    color: normalizeColor(payload.color, "#c16b39"),
+    archived: normalizeBoolean(payload.archived),
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  insertProjectStatement.run(
+    project.id,
+    project.userId,
+    project.name,
+    project.description,
+    project.color,
+    project.archived ? 1 : 0,
+    project.createdAt,
+    project.updatedAt
+  );
+
+  return getProjectOrThrow(userId, project.id);
+}
+
+function createStandaloneImportProject(userId, projectPayload = {}, appPayload = null) {
+  const inferredAppName = appPayload?.app?.name || appPayload?.name || "";
+
+  return createProjectRecord(userId, {
+    name:
+      projectPayload?.name ||
+      (inferredAppName ? `${inferredAppName} 项目` : "导入应用项目"),
+    description:
+      projectPayload?.description || "自动承接独立 App 版本导入数据的项目。",
+    color: projectPayload?.color || "#245a73",
+    archived: normalizeBoolean(projectPayload?.archived),
+  });
+}
+
+function inferProjectNameFromApps(apps) {
+  const firstAppName = apps[0]?.app?.name || apps[0]?.name || "";
+  return firstAppName ? `${String(firstAppName).trim()} 项目` : "导入应用项目";
+}
+
 function createEmptyVersionStatusSummary() {
   return {
     versionCount: 0,
@@ -564,6 +797,15 @@ function summarizeVersions(versions) {
   }, createEmptyVersionStatusSummary());
 }
 
+function getProjectOrThrow(userId, projectId) {
+  const row = selectProjectByIdForUserStatement.get(projectId, userId);
+  if (!row) {
+    throw createHttpError(404, "PROJECT_NOT_FOUND", "项目不存在");
+  }
+
+  return mapProject(row);
+}
+
 function getAppOrThrow(userId, appId) {
   const row = selectAppByIdStatement.get(appId, userId);
   if (!row) {
@@ -582,8 +824,16 @@ function getVersionOrThrow(userId, versionId) {
   return mapVersionRow(row);
 }
 
+function assertAppBelongsToProject(app, projectId) {
+  const normalizedProjectId = String(projectId || "");
+  if (!normalizedProjectId || app.projectId !== normalizedProjectId) {
+    throw createHttpError(404, "APP_NOT_FOUND", "应用不存在");
+  }
+}
+
 function persistVersionRecord(userId, appId, normalizedVersion) {
   const now = new Date().toISOString();
+  const app = getAppOrThrowFromAppId(appId);
   const position =
     Number(selectMaxPositionByAppStatement.get(appId)?.max_position || 0) + 1;
   const versionId = createId();
@@ -606,6 +856,8 @@ function persistVersionRecord(userId, appId, normalizedVersion) {
     now,
     now
   );
+
+  touchProject(app.projectId, now);
 
   return getVersionOrThrow(userId, versionId);
 }
@@ -650,15 +902,20 @@ function normalizeVersionInput(appId, payload = {}, options = {}) {
 }
 
 function getAppOrThrowFromAppId(appId) {
-  const statement = db.prepare(`
-    SELECT id
-    FROM apps
-    WHERE id = ?
-  `);
-  const row = statement.get(appId);
+  const row = selectAppByIdAnyUserStatement.get(appId);
   if (!row) {
     throw createHttpError(404, "APP_NOT_FOUND", "应用不存在");
   }
+
+  return mapApp(row);
+}
+
+function touchProject(projectId, timestamp = new Date().toISOString()) {
+  if (!projectId) {
+    return;
+  }
+
+  updateProjectTimestampStatement.run(timestamp, projectId);
 }
 
 function normalizeBulkVersionIds(appId, versionIds) {
@@ -676,6 +933,10 @@ function normalizeBulkVersionIds(appId, versionIds) {
   });
 
   return uniqueVersionIds;
+}
+
+function validateProjectName(value) {
+  return normalizeText(value, 80, { required: true, errorCode: "INVALID_PROJECT_NAME" });
 }
 
 function validateAppName(value) {
@@ -790,10 +1051,24 @@ function runTransaction(callback) {
   }
 }
 
+function mapProject(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: row.name,
+    description: row.description,
+    color: row.color,
+    archived: Boolean(row.archived),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function mapApp(row) {
   return {
     id: row.id,
     userId: row.user_id,
+    projectId: row.project_id,
     name: row.name,
     description: row.description,
     color: row.color,
@@ -809,6 +1084,7 @@ function mapVersionRow(row) {
   return {
     id: row.id,
     appId: row.app_id,
+    projectId: row.project_id || "",
     versionName: row.version_name,
     buildNumber: row.build_number,
     description: row.description,
@@ -855,11 +1131,15 @@ module.exports = {
   createApp,
   createVersion,
   deleteApp,
+  deleteAppsByProject,
   deleteVersion,
   exportApp,
+  exportAppsByProject,
   getAppOverview,
   getBoardForApp,
   importAppData,
+  importAppsIntoProject,
+  listAppsByProject,
   listAppsForUser,
   updateApp,
   updateVersion,

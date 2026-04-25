@@ -17,7 +17,7 @@
           <p class="eyebrow">Task Atlas</p>
           <h1>任务与版本管理</h1>
           <p class="brand-copy">
-            当前包含任务管理、App 版本管理、常用工具、数据工具和账号与同步五个模块。任务管理和版本管理分别独立运行，不会混在同一块里。
+            当前以项目管理为中心组织任务和 App 版本数据。项目统一在项目管理里维护，任务管理和 App 版本管理只使用已有项目。
           </p>
         </div>
 
@@ -39,64 +39,51 @@
         </section>
 
         <nav class="toolbox-groups" id="toolboxNav">
-          <section class="toolbox-group" data-group="task-management" aria-label="任务管理分类">
+          <section class="toolbox-group" data-group="project-management" aria-label="项目管理分类">
             <button
               class="toolbox-group-toggle"
               type="button"
-              data-group-toggle="task-management"
+              data-group-toggle="project-management"
               aria-expanded="true"
-              aria-controls="toolbox-group-task-management"
+              aria-controls="toolbox-group-project-management"
             >
               <span class="toolbox-group-copy">
                 <span class="section-kicker toolbox-group-kicker">Category</span>
-                <strong>任务管理</strong>
-                <small>先看总览，再进入项目详情管理任务内容、状态和时间。</small>
+                <strong>项目管理</strong>
+                <small>统一维护项目，再按项目处理任务和 App 版本。</small>
               </span>
               <span class="toolbox-group-arrow" aria-hidden="true"></span>
             </button>
 
-            <div class="toolbox-group-list" id="toolbox-group-task-management">
+            <div class="toolbox-group-list" id="toolbox-group-project-management">
+              <button class="toolbox-button" type="button" data-tool="projects">
+                <span class="toolbox-button-kicker">Projects</span>
+                <strong>项目管理</strong>
+                <small>创建、修改、归档项目，并维护当前项目标签</small>
+              </button>
+
               <button class="toolbox-button is-active" type="button" data-tool="overview">
-                <span class="toolbox-button-kicker">Overview</span>
+                <span class="toolbox-button-kicker">Task Overview</span>
                 <strong>任务总览</strong>
                 <small>查看总项目数、任务状态分布和每个项目的任务摘要</small>
               </button>
 
               <button class="toolbox-button" type="button" data-tool="details">
-                <span class="toolbox-button-kicker">Details</span>
-                <strong>任务详情</strong>
-                <small>按项目查看任务列表，并通过弹出面板管理项目和新建任务</small>
+                <span class="toolbox-button-kicker">Task Manager</span>
+                <strong>任务管理</strong>
+                <small>按已有项目查看任务列表，并为当前项目维护任务</small>
               </button>
-            </div>
-          </section>
 
-          <section class="toolbox-group" data-group="app-version" aria-label="App 版本管理分类">
-            <button
-              class="toolbox-group-toggle"
-              type="button"
-              data-group-toggle="app-version"
-              aria-expanded="true"
-              aria-controls="toolbox-group-app-version"
-            >
-              <span class="toolbox-group-copy">
-                <span class="section-kicker toolbox-group-kicker">Category</span>
-                <strong>App 版本管理</strong>
-                <small>先看应用版本总览，再进入详情维护 App 信息和版本节奏。</small>
-              </span>
-              <span class="toolbox-group-arrow" aria-hidden="true"></span>
-            </button>
-
-            <div class="toolbox-group-list" id="toolbox-group-app-version">
               <button class="toolbox-button" type="button" data-tool="app-overview">
                 <span class="toolbox-button-kicker">App Overview</span>
                 <strong>版本总览</strong>
-                <small>查看 App 数量、版本状态分布和每个应用的最近版本摘要</small>
+                <small>查看当前项目下 App 数量、版本状态分布和最近版本摘要</small>
               </button>
 
               <button class="toolbox-button" type="button" data-tool="app-details">
-                <span class="toolbox-button-kicker">Version Details</span>
-                <strong>版本详情</strong>
-                <small>按应用查看版本列表，并通过弹出面板管理 App 和版本记录</small>
+                <span class="toolbox-button-kicker">App Versions</span>
+                <strong>App 版本管理</strong>
+                <small>按当前项目查看 App 和版本记录，并维护发布节奏</small>
               </button>
             </div>
           </section>
@@ -338,13 +325,53 @@
             </div>
           </section>
 
+          <section class="workspace-view" data-view="projects" hidden>
+            <header class="topbar panel">
+              <div>
+                <p class="eyebrow">Project Manager</p>
+                <h2>项目管理</h2>
+                <p class="topbar-copy">
+                  统一维护项目基本信息和项目标签。任务管理与 App 版本管理都会直接使用这里已有的项目。
+                </p>
+              </div>
+              <div class="topbar-actions detail-quick-actions" aria-label="项目管理快捷操作">
+                <button class="primary-button" id="projectNewButton" type="button">
+                  新建项目
+                </button>
+              </div>
+            </header>
+
+            <section class="panel panel-section detail-panel detail-panel-wide" aria-label="项目管理">
+              <div class="section-heading">
+                <div>
+                  <p class="section-kicker">Project Manager</p>
+                  <h2>项目管理</h2>
+                </div>
+                <div class="detail-panel-header-actions">
+                  <span class="panel-badge" id="detailProjectCountBadge">0 个项目</span>
+                </div>
+              </div>
+
+              <div class="detail-subsection">
+                <div class="section-heading section-heading-compact">
+                  <div>
+                    <p class="section-kicker">Project List</p>
+                    <h2>项目列表</h2>
+                  </div>
+                </div>
+
+                <div class="stacked-list" id="projectManagerList"></div>
+              </div>
+            </section>
+          </section>
+
           <section class="workspace-view" data-view="details" hidden>
             <header class="topbar panel">
               <div>
-                <p class="eyebrow">Task Details</p>
-                <h2>任务详情</h2>
+                <p class="eyebrow">Task Manager</p>
+                <h2>任务管理</h2>
                 <p class="topbar-copy">
-                  选择一个项目后，这里会显示当前项目的任务列表。项目管理和新建任务通过按钮弹出面板处理。
+                  选择一个已有项目后，这里会显示当前项目的任务列表。项目本身请在“项目管理”模块中统一维护。
                 </p>
               </div>
               <div class="topbar-actions detail-quick-actions" aria-label="任务详情快捷操作">
@@ -358,10 +385,8 @@
                   class="ghost-button"
                   id="detailProjectPanelButton"
                   type="button"
-                  aria-expanded="false"
-                  aria-controls="detailProjectPanel"
                 >
-                  项目管理
+                  打开项目管理
                 </button>
                 <button
                   class="primary-button"
@@ -378,128 +403,6 @@
             <div class="detail-panel-backdrop" id="detailPanelBackdrop" hidden></div>
 
             <div class="detail-panel-layer" aria-live="polite">
-              <section
-                class="panel panel-section detail-panel detail-panel-wide"
-                id="detailProjectPanel"
-                aria-label="项目管理面板"
-                role="dialog"
-                aria-modal="true"
-                hidden
-              >
-                <div class="section-heading">
-                  <div>
-                    <p class="section-kicker">Project Manager</p>
-                    <h2>项目管理</h2>
-                  </div>
-                  <div class="detail-panel-header-actions">
-                    <span class="panel-badge" id="detailProjectCountBadge">0 个项目</span>
-                    <button
-                      class="ghost-button mini-button"
-                      type="button"
-                      data-detail-panel-close="project"
-                    >
-                      关闭
-                    </button>
-                  </div>
-                </div>
-
-                <p class="auth-copy" id="projectFormCopy">
-                  先选择项目，或直接创建一个新项目作为任务容器。
-                </p>
-
-                <form class="task-form" id="projectForm">
-                  <input id="projectIdInput" type="hidden" />
-
-                  <div class="field-grid">
-                    <label class="field" for="projectNameInput">
-                      <span>项目名称</span>
-                      <input
-                        id="projectNameInput"
-                        type="text"
-                        maxlength="80"
-                        placeholder="输入项目名称"
-                        required
-                      />
-                    </label>
-
-                    <label class="field" for="projectColorInput">
-                      <span>项目颜色</span>
-                      <input id="projectColorInput" type="color" value="#c16b39" />
-                    </label>
-                  </div>
-
-                  <label class="field" for="projectDescriptionInput">
-                    <span>项目说明</span>
-                    <textarea
-                      id="projectDescriptionInput"
-                      maxlength="600"
-                      placeholder="描述这个项目主要包含哪些任务"
-                    ></textarea>
-                  </label>
-
-                  <div class="form-actions">
-                    <button class="primary-button" id="projectSubmitButton" type="submit">
-                      创建项目
-                    </button>
-                    <button class="ghost-button" id="projectNewButton" type="button">
-                      新建项目
-                    </button>
-                    <button class="ghost-button" id="projectArchiveButton" type="button">
-                      归档项目
-                    </button>
-                    <button class="danger-button" id="projectDeleteButton" type="button">
-                      删除项目
-                    </button>
-                  </div>
-                </form>
-
-                <div class="detail-subsection">
-                  <div class="section-heading section-heading-compact">
-                    <div>
-                      <p class="section-kicker">Project Tags</p>
-                      <h2>项目标签</h2>
-                    </div>
-                  </div>
-
-                  <p class="auth-copy" id="tagManagerCopy">
-                    为当前项目补充标签，后续可在任务里关联这些标签并用于搜索筛选。
-                  </p>
-
-                  <form class="task-form" id="tagForm">
-                    <input id="tagIdInput" type="hidden" />
-
-                    <div class="field-grid">
-                      <label class="field" for="tagNameInput">
-                        <span>标签名称</span>
-                        <input
-                          id="tagNameInput"
-                          type="text"
-                          maxlength="40"
-                          placeholder="例如：前端、接口、验收"
-                          required
-                        />
-                      </label>
-
-                      <label class="field" for="tagColorInput">
-                        <span>标签颜色</span>
-                        <input id="tagColorInput" type="color" value="#245a73" />
-                      </label>
-                    </div>
-
-                    <div class="form-actions">
-                      <button class="primary-button" id="tagSubmitButton" type="submit">
-                        创建标签
-                      </button>
-                      <button class="ghost-button" id="tagResetButton" type="button">
-                        取消编辑
-                      </button>
-                    </div>
-                  </form>
-
-                  <div class="stacked-list" id="detailTagList"></div>
-                </div>
-              </section>
-
               <section
                 class="panel panel-section detail-panel"
                 id="detailTaskPanel"
@@ -716,7 +619,7 @@
                 <p class="eyebrow">Release Radar</p>
                 <h2>版本总览</h2>
                 <p class="topbar-copy">
-                  先看当前总共有多少个 App、版本状态如何分布，以及每个应用最近在推进哪些版本，再进入详情维护发布节奏。
+                  这里展示当前项目下的 App 和版本推进情况。项目来源统一使用项目管理模块里的已有项目。
                 </p>
               </div>
             </header>
@@ -802,12 +705,16 @@
             <header class="topbar panel">
               <div>
                 <p class="eyebrow">Version Details</p>
-                <h2>版本详情</h2>
+                <h2>App 版本管理</h2>
                 <p class="topbar-copy">
-                  选择一个 App 后，这里会显示当前应用的版本列表。App 管理和新建版本通过按钮弹出面板处理。
+                  这里会直接使用当前项目。项目切换和新建统一放在“项目管理”模块里处理。
                 </p>
               </div>
               <div class="topbar-actions detail-quick-actions" aria-label="版本详情快捷操作">
+                <div class="detail-project-switcher">
+                  <span>当前项目</span>
+                  <strong id="appDetailProjectName">暂无项目</strong>
+                </div>
                 <div class="detail-project-switcher">
                   <span>当前 App</span>
                   <select id="appDetailAppSelect" aria-label="选择版本详情应用">
@@ -864,7 +771,7 @@
                 </div>
 
                 <p class="auth-copy" id="appFormCopy">
-                  先选择一个 App，或直接创建一个新的应用版本容器。
+                  先选择一个项目，再在该项目下创建或编辑 App。
                 </p>
 
                 <form class="task-form" id="appForm">
@@ -964,7 +871,7 @@
                 </div>
 
                 <p class="auth-copy" id="versionAppHint">
-                  选择 App 后，在这里创建或编辑该应用下的版本记录。
+                  选择项目和 App 后，在这里创建或编辑该应用下的版本记录。
                 </p>
 
                 <form class="task-form" id="versionForm">
@@ -1208,7 +1115,7 @@
                     <strong id="dataAppCount">0</strong>
                   </article>
                   <article class="tool-metric-card">
-                    <span>当前应用版本</span>
+                    <span>版本数量</span>
                     <strong id="dataVersionCount">0</strong>
                   </article>
                   <article class="tool-metric-card">
@@ -1625,10 +1532,206 @@
             </div>
           </section>
         </div>
+
+        <div class="detail-panel-backdrop" id="projectCreateDialogBackdrop" hidden></div>
+
+        <div class="detail-panel-layer" aria-live="polite">
+          <section
+            class="panel panel-section detail-panel"
+            id="projectCreateDialog"
+            aria-label="新建项目弹窗"
+            role="dialog"
+            aria-modal="true"
+            hidden
+          >
+            <div class="section-heading">
+              <div>
+                <p class="section-kicker">New Project</p>
+                <h2>新建项目</h2>
+              </div>
+              <div class="detail-panel-header-actions">
+                <span class="panel-badge">项目创建</span>
+                <button
+                  class="ghost-button mini-button"
+                  id="projectCreateDialogCloseButton"
+                  type="button"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+
+            <p class="auth-copy" id="projectCreateDialogCopy">
+              创建成功后，会自动切换到新项目；任务管理和 App 版本管理都可以直接使用它。
+            </p>
+
+            <form class="task-form" id="projectCreateDialogForm">
+              <div class="field-grid">
+                <label class="field" for="projectCreateDialogNameInput">
+                  <span>项目名称</span>
+                  <input
+                    id="projectCreateDialogNameInput"
+                    type="text"
+                    maxlength="80"
+                    placeholder="输入项目名称"
+                    required
+                  />
+                </label>
+
+                <label class="field" for="projectCreateDialogColorInput">
+                  <span>项目颜色</span>
+                  <input id="projectCreateDialogColorInput" type="color" value="#c16b39" />
+                </label>
+              </div>
+
+              <label class="field" for="projectCreateDialogDescriptionInput">
+                <span>项目说明</span>
+                <textarea
+                  id="projectCreateDialogDescriptionInput"
+                  maxlength="600"
+                  placeholder="描述这个项目主要包含哪些任务和 App"
+                ></textarea>
+              </label>
+
+              <div class="form-actions">
+                <button class="primary-button" id="projectCreateDialogSubmitButton" type="submit">
+                  创建项目
+                </button>
+                <button
+                  class="ghost-button"
+                  id="projectCreateDialogCancelButton"
+                  type="button"
+                >
+                  取消
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
       </main>
     </div>
 
     <input id="jsonImportInput" type="file" accept="application/json,.json" hidden />
+
+    <div class="detail-panel-backdrop" id="projectEditDialogBackdrop" hidden></div>
+
+    <div class="detail-panel-layer" aria-live="polite">
+      <section
+        class="panel panel-section detail-panel detail-panel-wide"
+        id="projectEditDialog"
+        aria-label="编辑项目弹窗"
+        role="dialog"
+        aria-modal="true"
+        hidden
+      >
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Project Editor</p>
+            <h2>编辑项目</h2>
+          </div>
+          <div class="detail-panel-header-actions">
+            <button class="primary-button" id="projectSubmitButton" type="submit" form="projectForm">
+              保存项目
+            </button>
+            <button class="ghost-button" id="projectArchiveButton" type="button">
+              归档项目
+            </button>
+            <button class="danger-button" id="projectDeleteButton" type="button">
+              删除项目
+            </button>
+            <button
+              class="ghost-button mini-button"
+              id="projectEditDialogCloseButton"
+              type="button"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+
+        <p class="auth-copy" id="projectFormCopy">
+          在这里编辑项目名称、项目说明和项目标签。
+        </p>
+
+        <form class="task-form" id="projectForm">
+          <input id="projectIdInput" type="hidden" />
+
+          <div class="field-grid">
+            <label class="field" for="projectNameInput">
+              <span>项目名称</span>
+              <input
+                id="projectNameInput"
+                type="text"
+                maxlength="80"
+                placeholder="输入项目名称"
+                required
+              />
+            </label>
+
+            <label class="field" for="projectColorInput">
+              <span>项目颜色</span>
+              <input id="projectColorInput" type="color" value="#c16b39" />
+            </label>
+          </div>
+
+          <label class="field" for="projectDescriptionInput">
+            <span>项目说明</span>
+            <textarea
+              id="projectDescriptionInput"
+              maxlength="600"
+              placeholder="描述这个项目主要包含哪些任务和 App"
+            ></textarea>
+          </label>
+        </form>
+
+        <div class="detail-subsection">
+          <div class="section-heading section-heading-compact">
+            <div>
+              <p class="section-kicker">Project Tags</p>
+              <h2>项目标签</h2>
+            </div>
+          </div>
+
+          <p class="auth-copy" id="tagManagerCopy">
+            为当前项目补充标签，后续可在任务里关联这些标签并用于搜索筛选。
+          </p>
+
+          <form class="task-form" id="tagForm">
+            <input id="tagIdInput" type="hidden" />
+
+            <div class="field-grid">
+              <label class="field" for="tagNameInput">
+                <span>标签名称</span>
+                <input
+                  id="tagNameInput"
+                  type="text"
+                  maxlength="40"
+                  placeholder="例如：前端、接口、验收"
+                  required
+                />
+              </label>
+
+              <label class="field" for="tagColorInput">
+                <span>标签颜色</span>
+                <input id="tagColorInput" type="color" value="#245a73" />
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button class="primary-button" id="tagSubmitButton" type="submit">
+                创建标签
+              </button>
+              <button class="ghost-button" id="tagResetButton" type="button">
+                取消编辑
+              </button>
+            </div>
+          </form>
+
+          <div class="stacked-list" id="detailTagList"></div>
+        </div>
+      </section>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </body>
 </html>

@@ -1,6 +1,12 @@
 const crypto = require("node:crypto");
 
 const { db } = require("../db");
+const {
+  deleteAppsByProject,
+  exportAppsByProject,
+  importAppsIntoProject,
+  listAppsByProject,
+} = require("./app-version-service");
 
 const VALID_STATUSES = new Set(["todo", "doing", "review", "done"]);
 const VALID_PRIORITIES = new Set(["low", "medium", "high", "urgent"]);
@@ -231,20 +237,31 @@ function listProjectsForUser(userId) {
 function getWorkspaceOverview(userId) {
   const projects = listProjectsForUser(userId);
   const totals = createEmptyStatusSummary();
+  totals.appCount = 0;
+  totals.versionCount = 0;
 
   const projectSummaries = projects.map((project) => {
     const tasks = listTasksByProject(project.id);
+    const apps = listAppsByProject(userId, project.id);
     const statusSummary = summarizeTasks(tasks);
+    const versionCount = apps.reduce(
+      (count, app) => count + listAppVersionCount(app.id),
+      0
+    );
 
     totals.taskCount += statusSummary.taskCount;
     totals.todoCount += statusSummary.todoCount;
     totals.doingCount += statusSummary.doingCount;
     totals.reviewCount += statusSummary.reviewCount;
     totals.doneCount += statusSummary.doneCount;
+    totals.appCount += apps.length;
+    totals.versionCount += versionCount;
 
     return {
       ...project,
       ...statusSummary,
+      appCount: apps.length,
+      versionCount,
       recentTasks: [...tasks]
         .sort((left, right) => toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt))
         .slice(0, 3)
@@ -356,6 +373,7 @@ function updateProject(userId, projectId, payload = {}) {
 
 function deleteProject(userId, projectId) {
   getProjectOrThrow(userId, projectId);
+  deleteAppsByProject(userId, projectId);
   deleteProjectStatement.run(projectId, userId);
 }
 
@@ -541,10 +559,11 @@ function exportProject(userId, projectId) {
   }
 
   const tagMap = new Map(board.tags.map((tag) => [tag.id, tag]));
+  const apps = exportAppsByProject(userId, projectId);
 
   return {
     source: "task-atlas",
-    version: 2,
+    version: 4,
     scope: "project",
     exportedAt: new Date().toISOString(),
     project: {
@@ -577,6 +596,7 @@ function exportProject(userId, projectId) {
         completed: subtask.completed,
       })),
     })),
+    apps,
   };
 }
 
@@ -586,14 +606,27 @@ function importData(userId, payload = {}) {
   }
 
   return runTransaction(() => {
-    if (payload.scope === "workspace" && Array.isArray(payload.projects)) {
-      const importedProjects = payload.projects.map((projectPayload) =>
-        importProjectPayload(userId, projectPayload)
-      );
+    if (payload.scope === "workspace") {
+      const importedProjects = Array.isArray(payload.projects)
+        ? payload.projects.map((projectPayload) => importProjectPayload(userId, projectPayload))
+        : [];
+      let importedAppCount = Array.isArray(payload.projects)
+        ? payload.projects.reduce(
+            (count, projectPayload) =>
+              count + (Array.isArray(projectPayload.apps) ? projectPayload.apps.length : 0),
+            0
+          )
+        : 0;
+
+      if (Array.isArray(payload.apps) && payload.apps.length) {
+        importedProjects.push(importLegacyStandaloneAppsProject(userId, payload.apps));
+        importedAppCount += payload.apps.length;
+      }
 
       return {
         importedProjects,
         importedCount: importedProjects.length,
+        importedAppCount,
       };
     }
 
@@ -602,6 +635,7 @@ function importData(userId, payload = {}) {
       return {
         importedProjects: [importedProject],
         importedCount: 1,
+        importedAppCount: Array.isArray(payload.apps) ? payload.apps.length : 0,
       };
     }
 
@@ -613,6 +647,7 @@ function importProjectPayload(userId, payload) {
   const projectData = payload.project || payload;
   const tags = Array.isArray(payload.tags) ? payload.tags : [];
   const tasks = Array.isArray(payload.tasks) ? payload.tasks : [];
+  const apps = Array.isArray(payload.apps) ? payload.apps : [];
 
   const createdProject = createProject(userId, {
     name: projectData.name || "导入项目",
@@ -651,6 +686,20 @@ function importProjectPayload(userId, payload) {
     );
   });
 
+  importAppsIntoProject(userId, createdProject.id, apps);
+
+  return createdProject;
+}
+
+function importLegacyStandaloneAppsProject(userId, apps) {
+  const firstAppName = apps[0]?.app?.name || apps[0]?.name || "";
+  const createdProject = createProject(userId, {
+    name: firstAppName ? `${String(firstAppName).trim()} 项目` : "导入应用项目",
+    description: "自动承接旧版工作区 JSON 中独立 App 数据的项目。",
+    color: "#245a73",
+  });
+
+  importAppsIntoProject(userId, createdProject.id, apps);
   return createdProject;
 }
 
@@ -770,6 +819,16 @@ function listSubtasksByTask(taskId) {
   `);
 
   return statement.all(taskId).map(mapSubtask);
+}
+
+function listAppVersionCount(appId) {
+  const statement = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM app_versions
+    WHERE app_id = ?
+  `);
+
+  return Number(statement.get(appId)?.count || 0);
 }
 
 function replaceTaskTags(taskId, tagIds) {

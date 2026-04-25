@@ -43,6 +43,8 @@ const VERSION_CHANNEL_META = {
 
 const DEFAULT_PROJECT_NAME = "本地收件箱";
 const DEFAULT_PROJECT_DESCRIPTION = "未登录时保存在浏览器中的默认项目。";
+const LEGACY_APP_MIGRATION_PROJECT_NAME = "版本迁移项目";
+const LEGACY_APP_MIGRATION_PROJECT_DESCRIPTION = "自动承接旧版独立 App 数据的迁移项目。";
 const THEME_META = {
   day: {
     label: "白天模式",
@@ -55,25 +57,30 @@ const THEME_META = {
 };
 
 const TOOL_META = {
+  projects: {
+    label: "项目管理",
+    description: "统一创建、修改项目，并维护当前项目标签。",
+    group: "project-management",
+  },
   overview: {
     label: "任务总览",
     description: "默认先看全局统计、状态分布和项目摘要，再进入详情处理具体任务。",
-    group: "task-management",
+    group: "project-management",
   },
   details: {
-    label: "任务详情",
-    description: "按项目查看任务列表，并通过弹出面板管理项目和新建任务。",
-    group: "task-management",
+    label: "任务管理",
+    description: "按已有项目查看任务列表，并为当前项目维护任务。",
+    group: "project-management",
   },
   "app-overview": {
     label: "版本总览",
-    description: "默认先看应用数量、版本状态分布和最近版本摘要，再进入详情推进发布节奏。",
-    group: "app-version",
+    description: "查看当前项目下的应用数量、版本状态分布和最近版本摘要。",
+    group: "project-management",
   },
   "app-details": {
-    label: "版本详情",
-    description: "按应用查看版本列表，并通过弹出面板管理 App 信息和版本记录。",
-    group: "app-version",
+    label: "App 版本管理",
+    description: "按当前项目查看 App 列表，并维护该项目下的版本记录。",
+    group: "project-management",
   },
   data: {
     label: "数据工具",
@@ -107,8 +114,7 @@ const state = {
     themeMode: loadThemeMode(),
     activeTool: "overview",
     collapsedGroups: {
-      "task-management": false,
-      "app-version": false,
+      "project-management": false,
       "data-tools": false,
       "common-tools": false,
       "account-sync": false,
@@ -128,6 +134,8 @@ const state = {
     editingAppId: null,
     editingVersionId: null,
     activeAppDetailPanel: null,
+    projectEditDialogOpen: false,
+    projectCreateDialogOpen: false,
     expandedAppOverviewIds: [],
     expandedVersionRecordIds: [],
     selectedVersionIds: [],
@@ -167,11 +175,11 @@ const elements = {
   appOverviewReviewCount: document.querySelector("#appOverviewReviewCount"),
   appOverviewDoneCount: document.querySelector("#appOverviewDoneCount"),
   appVersionOverviewList: document.querySelector("#appVersionOverviewList"),
+  projectManagerList: document.querySelector("#projectManagerList"),
   detailProjectCountBadge: document.querySelector("#detailProjectCountBadge"),
   detailProjectPanelButton: document.querySelector("#detailProjectPanelButton"),
   detailTaskPanelButton: document.querySelector("#detailTaskPanelButton"),
   detailPanelBackdrop: document.querySelector("#detailPanelBackdrop"),
-  detailProjectPanel: document.querySelector("#detailProjectPanel"),
   detailTaskPanel: document.querySelector("#detailTaskPanel"),
   detailPanelCloseButtons: document.querySelectorAll("[data-detail-panel-close]"),
   projectFormCopy: document.querySelector("#projectFormCopy"),
@@ -221,12 +229,26 @@ const elements = {
   applyBulkStatusButton: document.querySelector("#applyBulkStatusButton"),
   taskDetailList: document.querySelector("#taskDetailList"),
   appDetailAppCountBadge: document.querySelector("#appDetailAppCountBadge"),
+  appDetailProjectName: document.querySelector("#appDetailProjectName"),
   appDetailAppPanelButton: document.querySelector("#appDetailAppPanelButton"),
   appDetailVersionPanelButton: document.querySelector("#appDetailVersionPanelButton"),
   appDetailPanelBackdrop: document.querySelector("#appDetailPanelBackdrop"),
   appDetailAppPanel: document.querySelector("#appDetailAppPanel"),
   appDetailVersionPanel: document.querySelector("#appDetailVersionPanel"),
   appDetailPanelCloseButtons: document.querySelectorAll("[data-app-detail-panel-close]"),
+  projectEditDialogBackdrop: document.querySelector("#projectEditDialogBackdrop"),
+  projectEditDialog: document.querySelector("#projectEditDialog"),
+  projectEditDialogCloseButton: document.querySelector("#projectEditDialogCloseButton"),
+  projectCreateDialogBackdrop: document.querySelector("#projectCreateDialogBackdrop"),
+  projectCreateDialog: document.querySelector("#projectCreateDialog"),
+  projectCreateDialogForm: document.querySelector("#projectCreateDialogForm"),
+  projectCreateDialogNameInput: document.querySelector("#projectCreateDialogNameInput"),
+  projectCreateDialogColorInput: document.querySelector("#projectCreateDialogColorInput"),
+  projectCreateDialogDescriptionInput: document.querySelector(
+    "#projectCreateDialogDescriptionInput"
+  ),
+  projectCreateDialogCloseButton: document.querySelector("#projectCreateDialogCloseButton"),
+  projectCreateDialogCancelButton: document.querySelector("#projectCreateDialogCancelButton"),
   appFormCopy: document.querySelector("#appFormCopy"),
   appDetailAppSelect: document.querySelector("#appDetailAppSelect"),
   appForm: document.querySelector("#appForm"),
@@ -330,6 +352,7 @@ function bindEvents() {
   elements.projectOverviewList.addEventListener("click", handleOverviewProjectAction);
   elements.appVersionOverviewList.addEventListener("click", handleAppOverviewAction);
   elements.projectSelect.addEventListener("change", handleProjectSelectionChange);
+  elements.projectManagerList.addEventListener("click", handleProjectManagerListClick);
   elements.detailProjectSelect.addEventListener("change", handleDetailProjectSelectionChange);
   elements.appDetailAppSelect.addEventListener("change", handleAppDetailSelectionChange);
   elements.detailProjectPanelButton.addEventListener("click", handleOpenProjectPanel);
@@ -338,13 +361,19 @@ function bindEvents() {
   elements.appDetailVersionPanelButton.addEventListener("click", handleOpenVersionPanel);
   elements.detailPanelBackdrop.addEventListener("click", closeDetailPanel);
   elements.appDetailPanelBackdrop.addEventListener("click", closeAppDetailPanel);
+  elements.projectEditDialogBackdrop.addEventListener("click", closeProjectEditDialog);
+  elements.projectCreateDialogBackdrop.addEventListener("click", closeProjectCreateDialog);
   elements.detailPanelCloseButtons.forEach((button) => {
     button.addEventListener("click", closeDetailPanel);
   });
   elements.appDetailPanelCloseButtons.forEach((button) => {
     button.addEventListener("click", closeAppDetailPanel);
   });
+  elements.projectEditDialogCloseButton.addEventListener("click", closeProjectEditDialog);
+  elements.projectCreateDialogCloseButton.addEventListener("click", closeProjectCreateDialog);
+  elements.projectCreateDialogCancelButton.addEventListener("click", closeProjectCreateDialog);
   elements.projectForm.addEventListener("submit", handleProjectFormSubmit);
+  elements.projectCreateDialogForm.addEventListener("submit", handleProjectCreateDialogSubmit);
   elements.projectNewButton.addEventListener("click", handleProjectNewClick);
   elements.projectArchiveButton.addEventListener("click", handleProjectArchiveToggle);
   elements.projectDeleteButton.addEventListener("click", handleProjectDelete);
@@ -553,23 +582,106 @@ async function handleDetailProjectSelectionChange(event) {
   await setCurrentProject(selectedProjectId, { nextTool: "details" });
 }
 
-function handleOpenProjectPanel() {
-  const currentProject = state.workspace.currentProject;
-
-  if (!currentProject) {
-    state.ui.projectFormMode = "create";
-    state.ui.editingProjectId = null;
-  } else if (state.ui.projectFormMode !== "create") {
-    state.ui.projectFormMode = "edit";
-    state.ui.editingProjectId = currentProject.id;
+async function handleProjectManagerListClick(event) {
+  const button = event.target.closest("[data-project-action]");
+  if (!button) {
+    return;
   }
 
-  state.ui.activeDetailPanel = "project";
+  const projectId = button.dataset.projectId;
+  if (!projectId) {
+    return;
+  }
+
+  if (button.dataset.projectAction === "edit") {
+    await openProjectEditDialog(projectId);
+    return;
+  }
+
+  if (button.dataset.projectAction === "switch") {
+    state.ui.projectFormMode = "edit";
+    state.ui.editingProjectId = projectId;
+    state.ui.editingTagId = null;
+    await setCurrentProject(projectId, { nextTool: "projects" });
+    return;
+  }
+
+  if (button.dataset.projectAction === "delete") {
+    await handleProjectDelete(projectId);
+  }
+}
+
+function resetProjectCreateDialogForm() {
+  elements.projectCreateDialogForm.reset();
+  elements.projectCreateDialogColorInput.value = "#c16b39";
+}
+
+async function openProjectEditDialog(projectId) {
+  if (!projectId) {
+    return;
+  }
+
+  state.ui.activeDetailPanel = null;
+  state.ui.activeAppDetailPanel = null;
+  state.ui.projectCreateDialogOpen = false;
+  state.ui.projectFormMode = "edit";
+  state.ui.editingProjectId = projectId;
+  state.ui.editingTagId = null;
+  await setCurrentProject(projectId, { nextTool: "projects" });
+  state.ui.projectEditDialogOpen = true;
   render();
 
   window.requestAnimationFrame(() => {
     if (typeof elements.projectNameInput.focus === "function" && !elements.projectNameInput.disabled) {
       elements.projectNameInput.focus();
+    }
+  });
+}
+
+function closeProjectEditDialog() {
+  if (!state.ui.projectEditDialogOpen) {
+    return;
+  }
+
+  state.ui.projectEditDialogOpen = false;
+  state.ui.editingTagId = null;
+  render();
+}
+
+function openProjectCreateDialog() {
+  state.ui.activeDetailPanel = null;
+  state.ui.activeAppDetailPanel = null;
+  state.ui.projectEditDialogOpen = false;
+  state.ui.projectCreateDialogOpen = true;
+  render();
+  resetProjectCreateDialogForm();
+
+  window.requestAnimationFrame(() => {
+    if (
+      typeof elements.projectCreateDialogNameInput.focus === "function" &&
+      !elements.projectCreateDialogNameInput.disabled
+    ) {
+      elements.projectCreateDialogNameInput.focus();
+    }
+  });
+}
+
+function closeProjectCreateDialog() {
+  if (!state.ui.projectCreateDialogOpen) {
+    return;
+  }
+
+  state.ui.projectCreateDialogOpen = false;
+  render();
+}
+
+function handleOpenProjectPanel() {
+  state.ui.activeDetailPanel = null;
+  setActiveTool("projects");
+
+  window.requestAnimationFrame(() => {
+    if (typeof elements.projectNewButton.focus === "function" && !elements.projectNewButton.disabled) {
+      elements.projectNewButton.focus();
     }
   });
 }
@@ -592,17 +704,6 @@ function closeDetailPanel() {
     return;
   }
 
-  if (activePanel === "project") {
-    state.ui.editingTagId = null;
-    if (state.workspace.currentProject) {
-      state.ui.projectFormMode = "edit";
-      state.ui.editingProjectId = state.workspace.currentProject.id;
-    } else {
-      state.ui.projectFormMode = "create";
-      state.ui.editingProjectId = null;
-    }
-  }
-
   if (activePanel === "task") {
     state.ui.editingTaskId = null;
   }
@@ -616,6 +717,14 @@ function handleGlobalKeydown(event) {
     return;
   }
 
+  if (state.ui.projectEditDialogOpen) {
+    closeProjectEditDialog();
+  }
+
+  if (state.ui.projectCreateDialogOpen) {
+    closeProjectCreateDialog();
+  }
+
   if (state.ui.activeDetailPanel) {
     closeDetailPanel();
   }
@@ -626,7 +735,12 @@ function handleGlobalKeydown(event) {
 }
 
 async function setCurrentProject(projectId, options = {}) {
-  const { nextTool = null, silent = false, preserveProjectCreateMode = false } = options;
+  const {
+    nextTool = null,
+    silent = false,
+    preserveProjectCreateMode = false,
+    preserveAppCreateMode = false,
+  } = options;
   const previousProjectId = state.workspace.currentProjectId;
 
   if (state.workspace.mode === "cloud") {
@@ -635,10 +749,20 @@ async function setCurrentProject(projectId, options = {}) {
       silent,
       preserveProjectCreateMode,
     });
+    await loadCloudAppWorkspace({
+      projectId: projectId || state.workspace.currentProjectId,
+      appId: state.appWorkspace.currentAppId,
+      silent,
+      preserveAppCreateMode,
+    });
   } else {
     state.guestWorkspace.currentProjectId = projectId;
     persistGuestWorkspace();
     syncGuestView(projectId, { preserveProjectCreateMode });
+    syncGuestAppView(state.appWorkspace.currentAppId, {
+      projectId,
+      preserveAppCreateMode,
+    });
   }
 
   if (projectId && projectId !== previousProjectId) {
@@ -646,7 +770,10 @@ async function setCurrentProject(projectId, options = {}) {
     state.ui.editingTaskId = null;
     state.ui.expandedTaskRecordIds = [];
     state.ui.selectedTaskIds = [];
+    state.ui.expandedVersionRecordIds = [];
+    state.ui.selectedVersionIds = [];
     resetTaskDetailFilters();
+    resetVersionDetailFilters();
   }
 
   if (nextTool) {
@@ -765,6 +892,7 @@ async function setCurrentApp(appId, options = {}) {
 
   if (state.appWorkspace.mode === "cloud") {
     await loadCloudAppWorkspace({
+      projectId: state.workspace.currentProjectId,
       appId,
       silent,
       preserveAppCreateMode,
@@ -772,7 +900,10 @@ async function setCurrentApp(appId, options = {}) {
   } else {
     state.guestWorkspace.currentAppId = appId;
     persistGuestWorkspace();
-    syncGuestAppView(appId, { preserveAppCreateMode });
+    syncGuestAppView(appId, {
+      projectId: state.workspace.currentProjectId,
+      preserveAppCreateMode,
+    });
   }
 
   if (appId && appId !== previousAppId) {
@@ -794,11 +925,57 @@ async function setCurrentApp(appId, options = {}) {
 }
 
 function handleProjectNewClick() {
-  state.ui.projectFormMode = "create";
-  state.ui.editingProjectId = null;
-  state.ui.editingTagId = null;
-  state.ui.activeDetailPanel = "project";
-  render();
+  openProjectCreateDialog();
+}
+
+async function handleProjectCreateDialogSubmit(event) {
+  event.preventDefault();
+
+  const projectName = elements.projectCreateDialogNameInput.value.trim();
+  const description = elements.projectCreateDialogDescriptionInput.value.trim();
+  const color = elements.projectCreateDialogColorInput.value;
+
+  if (!projectName) {
+    showToast("请输入项目名称");
+    return;
+  }
+
+  const payload = {
+    name: projectName,
+    description,
+    color,
+  };
+  const nextTool = state.ui.activeTool;
+
+  try {
+    let projectId = "";
+
+    if (state.workspace.mode === "cloud") {
+      const response = await apiRequest("/api/projects", {
+        method: "POST",
+        body: payload,
+      });
+      projectId = response.project?.id || "";
+    } else {
+      const project = createGuestProjectRecord(payload);
+      projectId = project.id;
+      updateGuestWorkspace((workspace) => {
+        workspace.projects.unshift(project);
+      });
+    }
+
+    state.ui.projectCreateDialogOpen = false;
+    state.ui.projectFormMode = "edit";
+    state.ui.editingProjectId = projectId || null;
+    state.ui.editingTagId = null;
+    state.ui.editingTaskId = null;
+    state.ui.editingAppId = null;
+    state.ui.editingVersionId = null;
+    await setCurrentProject(projectId, { nextTool });
+    showToast("项目已创建");
+  } catch (error) {
+    showToast(error.message || "项目创建失败");
+  }
 }
 
 function handleAppNewClick() {
@@ -839,7 +1016,7 @@ async function handleProjectFormSubmit(event) {
         state.ui.projectFormMode = "edit";
         state.ui.editingProjectId = response.project?.id || null;
         state.ui.editingTaskId = null;
-        await loadCloudWorkspace({ projectId: response.project?.id || null });
+        await loadWorkspaceForCurrentMode({ projectId: response.project?.id || null });
         render();
         showToast("项目已创建");
         return;
@@ -858,7 +1035,7 @@ async function handleProjectFormSubmit(event) {
 
       state.ui.projectFormMode = "edit";
       state.ui.editingProjectId = projectId;
-      await loadCloudWorkspace({ projectId });
+      await loadWorkspaceForCurrentMode({ projectId });
       render();
       showToast("项目已保存");
       return;
@@ -881,6 +1058,7 @@ async function handleProjectFormSubmit(event) {
       state.ui.editingProjectId = project.id;
       state.ui.editingTaskId = null;
       syncGuestView(project.id);
+      syncGuestAppView(null, { projectId: project.id });
       render();
       showToast("项目已创建");
       return;
@@ -910,6 +1088,7 @@ async function handleProjectFormSubmit(event) {
     state.ui.projectFormMode = "edit";
     state.ui.editingProjectId = projectId;
     syncGuestView(projectId);
+    syncGuestAppView(state.appWorkspace.currentAppId, { projectId });
     render();
     showToast("项目已保存");
   } catch (error) {
@@ -932,7 +1111,7 @@ async function handleProjectArchiveToggle() {
           archived: !currentProject.archived,
         },
       });
-      await loadCloudWorkspace({ projectId: currentProject.id });
+      await loadWorkspaceForCurrentMode({ projectId: currentProject.id });
     } else {
       updateGuestWorkspace((workspace) => {
         const timestamp = new Date().toISOString();
@@ -947,6 +1126,7 @@ async function handleProjectArchiveToggle() {
         );
       });
       syncGuestView(currentProject.id);
+      syncGuestAppView(state.appWorkspace.currentAppId, { projectId: currentProject.id });
     }
 
     render();
@@ -956,9 +1136,12 @@ async function handleProjectArchiveToggle() {
   }
 }
 
-async function handleProjectDelete() {
-  const currentProject = state.workspace.currentProject;
-  if (!currentProject || state.ui.projectFormMode === "create") {
+async function handleProjectDelete(targetProjectId = null) {
+  const resolvedProjectId =
+    typeof targetProjectId === "string" ? targetProjectId : state.workspace.currentProject?.id;
+  const currentProject = state.workspace.projects.find((project) => project.id === resolvedProjectId);
+
+  if (!currentProject) {
     showToast("请先选择一个项目");
     return;
   }
@@ -974,9 +1157,22 @@ async function handleProjectDelete() {
       });
       state.ui.editingTaskId = null;
       state.ui.projectFormMode = "edit";
-      await loadCloudWorkspace();
+      if (resolvedProjectId === state.workspace.currentProject?.id) {
+        state.ui.projectEditDialogOpen = false;
+      }
+      await loadWorkspaceForCurrentMode({
+        projectId:
+          resolvedProjectId === state.workspace.currentProject?.id
+            ? null
+            : state.workspace.currentProject?.id || null,
+      });
     } else {
       updateGuestWorkspace((workspace) => {
+        const removedAppIds = new Set(
+          workspace.apps
+            .filter((app) => app.projectId === currentProject.id)
+            .map((app) => app.id)
+        );
         workspace.projects = workspace.projects.filter(
           (project) => project.id !== currentProject.id
         );
@@ -984,13 +1180,21 @@ async function handleProjectDelete() {
         workspace.tasks = workspace.tasks.filter(
           (task) => task.projectId !== currentProject.id
         );
+        workspace.apps = workspace.apps.filter((app) => app.projectId !== currentProject.id);
+        workspace.versions = workspace.versions.filter(
+          (version) => !removedAppIds.has(version.appId)
+        );
         if (workspace.currentProjectId === currentProject.id) {
           workspace.currentProjectId = null;
         }
       });
       state.ui.editingTaskId = null;
       state.ui.projectFormMode = "edit";
+      if (resolvedProjectId === state.workspace.currentProject?.id) {
+        state.ui.projectEditDialogOpen = false;
+      }
       syncGuestView();
+      syncGuestAppView();
     }
 
     render();
@@ -1580,6 +1784,12 @@ async function handleTaskListChange(event) {
 async function handleAppFormSubmit(event) {
   event.preventDefault();
 
+  const currentProject = state.workspace.currentProject;
+  if (!currentProject) {
+    showToast("请先选择项目");
+    return;
+  }
+
   const appName = elements.appNameInput.value.trim();
   if (!appName) {
     showToast("请输入 App 名称");
@@ -1599,14 +1809,17 @@ async function handleAppFormSubmit(event) {
   try {
     if (state.appWorkspace.mode === "cloud") {
       if (isCreateMode) {
-        const response = await apiRequest("/api/apps", {
+        const response = await apiRequest(`/api/projects/${currentProject.id}/apps`, {
           method: "POST",
           body: payload,
         });
         state.ui.appFormMode = "edit";
         state.ui.editingAppId = response.app?.id || null;
         state.ui.editingVersionId = null;
-        await loadCloudAppWorkspace({ appId: response.app?.id || null });
+        await loadCloudAppWorkspace({
+          projectId: currentProject.id,
+          appId: response.app?.id || null,
+        });
         render();
         showToast("App 已创建");
         return;
@@ -1625,14 +1838,14 @@ async function handleAppFormSubmit(event) {
 
       state.ui.appFormMode = "edit";
       state.ui.editingAppId = appId;
-      await loadCloudAppWorkspace({ appId });
+      await loadCloudAppWorkspace({ projectId: currentProject.id, appId });
       render();
       showToast("App 已保存");
       return;
     }
 
     if (isCreateMode) {
-      const app = createGuestAppRecord(payload);
+      const app = createGuestAppRecord(currentProject.id, payload);
       updateGuestWorkspace((workspace) => {
         workspace.apps.unshift(app);
         workspace.currentAppId = app.id;
@@ -1641,7 +1854,7 @@ async function handleAppFormSubmit(event) {
       state.ui.appFormMode = "edit";
       state.ui.editingAppId = app.id;
       state.ui.editingVersionId = null;
-      syncGuestAppView(app.id);
+      syncGuestAppView(app.id, { projectId: currentProject.id });
       render();
       showToast("App 已创建");
       return;
@@ -1670,7 +1883,7 @@ async function handleAppFormSubmit(event) {
 
     state.ui.appFormMode = "edit";
     state.ui.editingAppId = appId;
-    syncGuestAppView(appId);
+    syncGuestAppView(appId, { projectId: currentProject.id });
     render();
     showToast("App 已保存");
   } catch (error) {
@@ -1679,8 +1892,9 @@ async function handleAppFormSubmit(event) {
 }
 
 async function handleAppArchiveToggle() {
+  const currentProject = state.workspace.currentProject;
   const currentApp = state.appWorkspace.currentApp;
-  if (!currentApp || state.ui.appFormMode === "create") {
+  if (!currentProject || !currentApp || state.ui.appFormMode === "create") {
     showToast("请先选择一个 App");
     return;
   }
@@ -1693,7 +1907,7 @@ async function handleAppArchiveToggle() {
           archived: !currentApp.archived,
         },
       });
-      await loadCloudAppWorkspace({ appId: currentApp.id });
+      await loadCloudAppWorkspace({ projectId: currentProject.id, appId: currentApp.id });
     } else {
       updateGuestWorkspace((workspace) => {
         const timestamp = new Date().toISOString();
@@ -1707,7 +1921,7 @@ async function handleAppArchiveToggle() {
             : app
         );
       });
-      syncGuestAppView(currentApp.id);
+      syncGuestAppView(currentApp.id, { projectId: currentProject.id });
     }
 
     render();
@@ -1718,8 +1932,9 @@ async function handleAppArchiveToggle() {
 }
 
 async function handleAppDelete() {
+  const currentProject = state.workspace.currentProject;
   const currentApp = state.appWorkspace.currentApp;
-  if (!currentApp || state.ui.appFormMode === "create") {
+  if (!currentProject || !currentApp || state.ui.appFormMode === "create") {
     showToast("请先选择一个 App");
     return;
   }
@@ -1735,7 +1950,7 @@ async function handleAppDelete() {
       });
       state.ui.editingVersionId = null;
       state.ui.appFormMode = "edit";
-      await loadCloudAppWorkspace();
+      await loadCloudAppWorkspace({ projectId: currentProject.id });
     } else {
       updateGuestWorkspace((workspace) => {
         workspace.apps = workspace.apps.filter((app) => app.id !== currentApp.id);
@@ -1748,7 +1963,7 @@ async function handleAppDelete() {
       });
       state.ui.editingVersionId = null;
       state.ui.appFormMode = "edit";
-      syncGuestAppView();
+      syncGuestAppView(null, { projectId: currentProject.id });
     }
 
     render();
@@ -1761,9 +1976,10 @@ async function handleAppDelete() {
 async function handleVersionFormSubmit(event) {
   event.preventDefault();
 
+  const currentProject = state.workspace.currentProject;
   const currentApp = state.appWorkspace.currentApp;
-  if (!currentApp) {
-    showToast("请先创建或选择 App");
+  if (!currentProject || !currentApp) {
+    showToast("请先选择项目并创建或选择 App");
     return;
   }
 
@@ -1797,7 +2013,7 @@ async function handleVersionFormSubmit(event) {
           body: payload,
         });
       } else {
-        await apiRequest(`/api/apps/${currentApp.id}/versions`, {
+        await apiRequest(`/api/projects/${currentProject.id}/apps/${currentApp.id}/versions`, {
           method: "POST",
           body: payload,
         });
@@ -1807,7 +2023,7 @@ async function handleVersionFormSubmit(event) {
       if (!editingVersionId) {
         state.ui.activeAppDetailPanel = null;
       }
-      await loadCloudAppWorkspace({ appId: currentApp.id });
+      await loadCloudAppWorkspace({ projectId: currentProject.id, appId: currentApp.id });
       render();
       showToast(editingVersionId ? "版本已保存" : "版本已创建");
       return;
@@ -1854,7 +2070,7 @@ async function handleVersionFormSubmit(event) {
     if (!editingVersionId) {
       state.ui.activeAppDetailPanel = null;
     }
-    syncGuestAppView(currentApp.id);
+    syncGuestAppView(currentApp.id, { projectId: currentProject.id });
     render();
     showToast(editingVersionId ? "版本已保存" : "版本已创建");
   } catch (error) {
@@ -1909,13 +2125,14 @@ function handleSelectVisibleVersions() {
 }
 
 async function handleApplyBulkVersionStatus() {
+  const currentProject = state.workspace.currentProject;
   const currentApp = state.appWorkspace.currentApp;
   const versionIds = state.ui.selectedVersionIds.filter((versionId) =>
     state.appWorkspace.versions.some((version) => version.id === versionId)
   );
   const status = elements.bulkVersionStatusInput.value;
 
-  if (!currentApp) {
+  if (!currentProject || !currentApp) {
     showToast("请先选择 App");
     return;
   }
@@ -1927,14 +2144,14 @@ async function handleApplyBulkVersionStatus() {
 
   try {
     if (state.appWorkspace.mode === "cloud") {
-      await apiRequest(`/api/apps/${currentApp.id}/versions`, {
+      await apiRequest(`/api/projects/${currentProject.id}/apps/${currentApp.id}/versions`, {
         method: "PATCH",
         body: {
           versionIds,
           status,
         },
       });
-      await loadCloudAppWorkspace({ appId: currentApp.id });
+      await loadCloudAppWorkspace({ projectId: currentProject.id, appId: currentApp.id });
     } else {
       updateGuestWorkspace((workspace) => {
         const timestamp = new Date().toISOString();
@@ -1957,7 +2174,7 @@ async function handleApplyBulkVersionStatus() {
         );
         touchGuestApp(workspace, currentApp.id, timestamp);
       });
-      syncGuestAppView(currentApp.id);
+      syncGuestAppView(currentApp.id, { projectId: currentProject.id });
     }
 
     state.ui.selectedVersionIds = [];
@@ -2020,13 +2237,18 @@ async function handleVersionListClick(event) {
       await apiRequest(`/api/app-versions/${versionId}`, {
         method: "DELETE",
       });
-      await loadCloudAppWorkspace({ appId: state.appWorkspace.currentAppId });
+      await loadCloudAppWorkspace({
+        projectId: state.workspace.currentProjectId,
+        appId: state.appWorkspace.currentAppId,
+      });
     } else {
       updateGuestWorkspace((workspace) => {
         workspace.versions = workspace.versions.filter((item) => item.id !== versionId);
         touchGuestApp(workspace, version.appId, new Date().toISOString());
       });
-      syncGuestAppView(state.appWorkspace.currentAppId);
+      syncGuestAppView(state.appWorkspace.currentAppId, {
+        projectId: state.workspace.currentProjectId,
+      });
     }
 
     render();
@@ -2083,7 +2305,10 @@ async function handleVersionListChange(event) {
           status: nextStatus,
         },
       });
-      await loadCloudAppWorkspace({ appId: state.appWorkspace.currentAppId });
+      await loadCloudAppWorkspace({
+        projectId: state.workspace.currentProjectId,
+        appId: state.appWorkspace.currentAppId,
+      });
     } else {
       updateGuestWorkspace((workspace) => {
         const timestamp = new Date().toISOString();
@@ -2106,7 +2331,9 @@ async function handleVersionListChange(event) {
         );
         touchGuestApp(workspace, version.appId, timestamp);
       });
-      syncGuestAppView(state.appWorkspace.currentAppId);
+      syncGuestAppView(state.appWorkspace.currentAppId, {
+        projectId: state.workspace.currentProjectId,
+      });
     }
 
     render();
@@ -2247,19 +2474,21 @@ async function restoreSession(options = {}) {
 
 async function loadWorkspaceForCurrentMode(options = {}) {
   if (state.auth.user) {
-    await Promise.all([
-      loadCloudWorkspace(options),
-      loadCloudAppWorkspace({
-        appId: options.appId || state.appWorkspace.currentAppId,
-        silent: options.silent,
-        preserveAppCreateMode: options.preserveAppCreateMode,
-      }),
-    ]);
+    await loadCloudWorkspace(options);
+    await loadCloudAppWorkspace({
+      projectId: options.projectId || state.workspace.currentProjectId,
+      appId: options.appId || state.appWorkspace.currentAppId,
+      silent: options.silent,
+      preserveAppCreateMode: options.preserveAppCreateMode,
+    });
     return;
   }
 
   syncGuestView(options.projectId, options);
-  syncGuestAppView(options.appId, options);
+  syncGuestAppView(options.appId, {
+    ...options,
+    projectId: options.projectId || state.guestWorkspace.currentProjectId,
+  });
 }
 
 async function loadCloudWorkspace(options = {}) {
@@ -2359,15 +2588,23 @@ function syncGuestView(preferredProjectId = null, options = {}) {
 
 async function loadCloudAppWorkspace(options = {}) {
   const {
+    projectId = null,
     appId = null,
     silent = false,
     preserveAppCreateMode = false,
   } = options;
 
   try {
+    const selectedProjectId = projectId || state.workspace.currentProjectId;
+    if (!selectedProjectId) {
+      state.appWorkspace = createEmptyAppWorkspaceView("cloud");
+      syncAppEditorStateAfterWorkspaceSync({ preserveAppCreateMode });
+      return;
+    }
+
     const [appsResponse, overviewResponse] = await Promise.all([
-      apiRequest("/api/apps"),
-      apiRequest("/api/apps/overview"),
+      apiRequest(`/api/projects/${selectedProjectId}/apps`),
+      apiRequest(`/api/projects/${selectedProjectId}/apps/overview`),
     ]);
     const apps = Array.isArray(appsResponse.apps) ? sortProjects(appsResponse.apps) : [];
     const overview = normalizeAppOverviewPayload(overviewResponse);
@@ -2376,6 +2613,7 @@ async function loadCloudAppWorkspace(options = {}) {
     if (!selectedApp) {
       state.appWorkspace = {
         ...createEmptyAppWorkspaceView("cloud"),
+        projectId: selectedProjectId,
         apps,
         overview,
       };
@@ -2383,11 +2621,12 @@ async function loadCloudAppWorkspace(options = {}) {
       return;
     }
 
-    const board = await apiRequest(`/api/apps/${selectedApp.id}/board`);
+    const board = await apiRequest(`/api/projects/${selectedProjectId}/apps/${selectedApp.id}/board`);
     const boardApps = Array.isArray(board.apps) ? sortProjects(board.apps) : apps;
 
     state.appWorkspace = {
       mode: "cloud",
+      projectId: selectedProjectId,
       apps: boardApps,
       currentAppId: board.app?.id || selectedApp.id,
       currentApp: board.app || selectedApp,
@@ -2409,11 +2648,14 @@ async function loadCloudAppWorkspace(options = {}) {
 }
 
 function syncGuestAppView(preferredAppId = null, options = {}) {
-  const { preserveAppCreateMode = false } = options;
+  const { preserveAppCreateMode = false, projectId = null } = options;
 
   state.guestWorkspace = normalizeGuestWorkspace(state.guestWorkspace);
 
-  const apps = sortProjects(state.guestWorkspace.apps);
+  const selectedProjectId = projectId || state.guestWorkspace.currentProjectId || null;
+  const apps = sortProjects(
+    state.guestWorkspace.apps.filter((app) => app.projectId === selectedProjectId)
+  );
   const currentApp =
     apps.find((app) => app.id === preferredAppId) ||
     apps.find((app) => app.id === state.guestWorkspace.currentAppId) ||
@@ -2425,13 +2667,14 @@ function syncGuestAppView(preferredAppId = null, options = {}) {
 
   state.appWorkspace = {
     mode: "guest",
+    projectId: selectedProjectId,
     apps,
     currentAppId: currentApp ? currentApp.id : null,
     currentApp,
     versions: currentApp
       ? state.guestWorkspace.versions.filter((version) => version.appId === currentApp.id)
       : [],
-    overview: buildGuestAppWorkspaceOverview(state.guestWorkspace),
+    overview: buildGuestAppWorkspaceOverview(state.guestWorkspace, selectedProjectId),
   };
 
   syncAppEditorStateAfterWorkspaceSync({ preserveAppCreateMode });
@@ -2733,6 +2976,8 @@ function handleClearGuestData() {
 function render() {
   renderToolbox();
   renderActiveTool();
+  renderProjectManagement();
+  renderProjectEditDialog();
   renderOverview();
   renderDetails();
   renderAppOverview();
@@ -2741,6 +2986,7 @@ function render() {
   renderDataTools();
   renderUtilities();
   renderSyncPanel();
+  renderProjectCreateDialog();
 }
 
 function renderToolbox() {
@@ -2784,6 +3030,14 @@ function renderToolbox() {
     : "游客模式";
   elements.workspaceModePill.textContent = modeLabel;
 
+  if (state.ui.activeTool === "projects") {
+    elements.toolboxProjectName.textContent = currentProject ? currentProject.name : "项目管理";
+    elements.toolboxProjectMeta.textContent = currentProject
+      ? `当前项目已作为任务管理和 App 版本管理的统一容器。${activeTool.description}`
+      : activeTool.description;
+    return;
+  }
+
   if (state.ui.activeTool === "overview") {
     elements.toolboxProjectName.textContent = "任务总览";
     elements.toolboxProjectMeta.textContent = `当前共有 ${overviewTotals.projectCount} 个项目、${overviewTotals.taskCount} 项任务。${activeTool.description}`;
@@ -2801,17 +3055,23 @@ function renderToolbox() {
   }
 
   if (state.ui.activeTool === "app-overview") {
-    elements.toolboxProjectName.textContent = "版本总览";
-    elements.toolboxProjectMeta.textContent = `当前共有 ${appOverviewTotals.appCount} 个 App、${appOverviewTotals.versionCount} 个版本。${activeTool.description}`;
+    elements.toolboxProjectName.textContent = currentProject ? currentProject.name : "版本总览";
+    elements.toolboxProjectMeta.textContent = currentProject
+      ? `当前项目共有 ${appOverviewTotals.appCount} 个 App、${appOverviewTotals.versionCount} 个版本。${activeTool.description}`
+      : activeTool.description;
     return;
   }
 
   if (state.ui.activeTool === "app-details") {
-    elements.toolboxProjectName.textContent = currentApp ? currentApp.name : "版本详情";
+    elements.toolboxProjectName.textContent = currentApp
+      ? currentApp.name
+      : currentProject
+        ? currentProject.name
+        : "App 版本管理";
     elements.toolboxProjectMeta.textContent = currentApp
-      ? `当前 App 共有 ${state.appWorkspace.versions.length} 个版本，创建于 ${formatDateTime(
-          currentApp.createdAt
-        )}。${activeTool.description}`
+      ? `当前 App 归属项目“${currentProject?.name || "未选择"}”，共有 ${
+          state.appWorkspace.versions.length
+        } 个版本。${activeTool.description}`
       : activeTool.description;
     return;
   }
@@ -2840,6 +3100,7 @@ function renderToolbox() {
 
 function isToolboxActionDisabled(action, context) {
   const { currentProject, pendingTaskCount } = context;
+  const workspaceAppCount = Number(state.workspace.overview?.totals?.appCount || 0);
 
   switch (action) {
     case "refresh-workspace":
@@ -2847,7 +3108,7 @@ function isToolboxActionDisabled(action, context) {
     case "open-current-project":
       return !currentProject;
     case "copy-workspace-summary":
-      return state.workspace.projects.length === 0 && state.appWorkspace.apps.length === 0;
+      return state.workspace.projects.length === 0 && workspaceAppCount === 0;
     case "copy-project-summary":
       return !currentProject;
     case "copy-pending-tasks":
@@ -2855,7 +3116,7 @@ function isToolboxActionDisabled(action, context) {
     case "copy-project-json":
       return !currentProject;
     case "export-workspace":
-      return state.workspace.projects.length === 0 && state.appWorkspace.apps.length === 0;
+      return state.workspace.projects.length === 0 && workspaceAppCount === 0;
     default:
       return false;
   }
@@ -2993,41 +3254,125 @@ function renderOverview() {
     .join("");
 }
 
-function renderDetails() {
+function renderProjectManagement() {
   const projects = state.workspace.projects;
   const currentProject = state.workspace.currentProject;
-  const isProjectCreateMode =
-    state.ui.projectFormMode === "create" || !currentProject || !state.ui.editingProjectId;
+  const overviewProjects = Array.isArray(state.workspace.overview?.projects)
+    ? state.workspace.overview.projects
+    : [];
+  const projectSummaryById = new Map(overviewProjects.map((project) => [project.id, project]));
 
   elements.detailProjectCountBadge.textContent = `${projects.length} 个项目`;
-  elements.detailProjectSelect.innerHTML = buildProjectOptions(projects, "暂无项目");
-  elements.detailProjectSelect.value = currentProject?.id || "";
-  elements.detailProjectSelect.disabled = !projects.length;
 
-  elements.projectIdInput.value = isProjectCreateMode ? "" : currentProject?.id || "";
-  elements.projectNameInput.value = isProjectCreateMode ? "" : currentProject?.name || "";
-  elements.projectColorInput.value = isProjectCreateMode
-    ? currentProject?.color || "#c16b39"
-    : currentProject?.color || "#c16b39";
-  elements.projectDescriptionInput.value = isProjectCreateMode
-    ? ""
-    : currentProject?.description || "";
-  elements.projectSubmitButton.textContent = isProjectCreateMode ? "创建项目" : "保存项目";
-  elements.projectArchiveButton.textContent = currentProject?.archived
-    ? "取消归档"
-    : "归档项目";
-  elements.projectArchiveButton.disabled = !currentProject || isProjectCreateMode;
-  elements.projectDeleteButton.disabled = !currentProject || isProjectCreateMode;
-
-  if (!currentProject) {
-    elements.projectFormCopy.textContent = "当前没有项目，先创建一个项目作为任务容器。";
-  } else if (isProjectCreateMode) {
-    elements.projectFormCopy.textContent = `正在创建新项目。当前任务列表仍显示项目“${currentProject.name}”的内容。`;
+  if (!projects.length) {
+    elements.projectManagerList.innerHTML = createEmptyStateMarkup(
+      "还没有项目",
+      "点击顶部“新建项目”，先创建一个任务和 App 的统一容器。"
+    );
   } else {
-    elements.projectFormCopy.textContent = `当前正在编辑项目“${currentProject.name}”，可以修改项目名称、颜色和说明。`;
+    elements.projectManagerList.innerHTML = projects
+      .map((project) => {
+        const summary = projectSummaryById.get(project.id) || {};
+        const isCurrent = currentProject?.id === project.id;
+
+        return `
+          <div class="manager-item">
+            <div>
+              <div class="manager-main">
+                <span
+                  class="manager-swatch"
+                  style="background:${escapeHtml(project.color || "#c16b39")};"
+                ></span>
+                <strong>${escapeHtml(project.name || "未命名项目")}</strong>
+              </div>
+              <div class="meta-row">
+                <span class="status-pill ${project.archived ? "status-review" : "status-doing"}">
+                  ${project.archived ? "已归档" : "活跃"}
+                </span>
+                <span class="priority-pill priority-high">任务 ${escapeHtml(
+                  String(summary.taskCount || 0)
+                )}</span>
+                <span class="priority-pill priority-medium">App ${escapeHtml(
+                  String(summary.appCount || 0)
+                )}</span>
+                <span class="priority-pill priority-low">版本 ${escapeHtml(
+                  String(summary.versionCount || 0)
+                )}</span>
+              </div>
+            </div>
+
+            <div class="meta-row">
+              ${
+                isCurrent
+                  ? `<span class="status-pill status-doing">当前项目</span>`
+                  : ""
+              }
+              <button
+                class="${isCurrent ? "primary-button" : "ghost-button"} mini-button"
+                type="button"
+                data-project-action="switch"
+                data-project-id="${escapeHtml(project.id)}"
+                ${isCurrent ? "disabled" : ""}
+              >
+                ${isCurrent ? "已切换" : "切换为当前项目"}
+              </button>
+              <button
+                class="ghost-button mini-button"
+                type="button"
+                data-project-action="edit"
+                data-project-id="${escapeHtml(project.id)}"
+              >
+                编辑项目
+              </button>
+              <button
+                class="danger-button mini-button"
+                type="button"
+                data-project-action="delete"
+                data-project-id="${escapeHtml(project.id)}"
+              >
+                删除项目
+              </button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
   }
+}
+
+function renderProjectEditDialog() {
+  const currentProject = state.workspace.currentProject;
+  const isOpen = state.ui.projectEditDialogOpen && Boolean(currentProject);
+
+  elements.projectEditDialogBackdrop.hidden = !isOpen;
+  elements.projectEditDialog.hidden = !isOpen;
+  elements.projectEditDialog.setAttribute("aria-hidden", String(!isOpen));
+  elements.projectIdInput.value = currentProject?.id || "";
+  elements.projectNameInput.value = currentProject?.name || "";
+  elements.projectColorInput.value = currentProject?.color || "#c16b39";
+  elements.projectDescriptionInput.value = currentProject?.description || "";
+  elements.projectSubmitButton.textContent = "保存项目";
+  elements.projectArchiveButton.textContent = currentProject?.archived ? "取消归档" : "归档项目";
+  elements.projectArchiveButton.disabled = !currentProject;
+  elements.projectDeleteButton.disabled = !currentProject;
+  setFormDisabled(elements.projectForm, !currentProject);
+  elements.projectFormCopy.textContent = currentProject
+    ? `当前正在编辑项目“${currentProject.name}”，任务管理和 App 版本管理都会直接使用这个项目。`
+    : "当前没有可编辑的项目。";
 
   renderTagManager();
+}
+
+function renderDetails() {
+  const currentProject = state.workspace.currentProject;
+
+  elements.detailProjectSelect.innerHTML = buildProjectOptions(
+    state.workspace.projects,
+    "暂无项目"
+  );
+  elements.detailProjectSelect.value = currentProject?.id || "";
+  elements.detailProjectSelect.disabled = !state.workspace.projects.length;
+  elements.detailTaskPanelButton.disabled = !currentProject;
   renderTaskEditor();
   renderTaskFilterControls();
   renderTaskListPanel();
@@ -3125,20 +3470,20 @@ function renderTaskEditor() {
 
 function renderDetailPanels() {
   const activePanel = state.ui.activeTool === "details" ? state.ui.activeDetailPanel : null;
-  const isProjectPanelOpen = activePanel === "project";
   const isTaskPanelOpen = activePanel === "task";
   const isPanelOpen = Boolean(activePanel);
 
   document.body.classList.toggle(
     "detail-panel-open",
-    isPanelOpen || Boolean(state.ui.activeTool === "app-details" && state.ui.activeAppDetailPanel)
+    isPanelOpen ||
+      Boolean(state.ui.activeTool === "app-details" && state.ui.activeAppDetailPanel) ||
+      state.ui.projectEditDialogOpen ||
+      state.ui.projectCreateDialogOpen
   );
   elements.detailPanelBackdrop.hidden = !isPanelOpen;
-  elements.detailProjectPanel.hidden = !isProjectPanelOpen;
   elements.detailTaskPanel.hidden = !isTaskPanelOpen;
-  elements.detailProjectPanel.setAttribute("aria-hidden", String(!isProjectPanelOpen));
   elements.detailTaskPanel.setAttribute("aria-hidden", String(!isTaskPanelOpen));
-  elements.detailProjectPanelButton.setAttribute("aria-expanded", String(isProjectPanelOpen));
+  elements.detailProjectPanelButton.setAttribute("aria-expanded", "false");
   elements.detailTaskPanelButton.setAttribute("aria-expanded", String(isTaskPanelOpen));
 }
 
@@ -3400,7 +3745,7 @@ function renderTaskRecord(task, tagMap) {
 
 function renderTaskTagPicker(tags, selectedTagIds) {
   if (!tags.length) {
-    return createEmptyInlineMarkup("当前项目还没有标签，可先在项目管理面板中创建");
+    return createEmptyInlineMarkup("当前项目还没有标签，可先在项目管理模块中创建");
   }
 
   const selectedIds = new Set(selectedTagIds);
@@ -3491,6 +3836,7 @@ function resetTaskDetailFilters() {
 }
 
 function renderAppOverview() {
+  const currentProject = state.workspace.currentProject;
   const overview = state.appWorkspace.overview || createEmptyAppOverview();
   const totals = overview.totals || createEmptyAppOverview().totals;
   const releaseRate = totals.versionCount
@@ -3511,10 +3857,18 @@ function renderAppOverview() {
   elements.appOverviewReviewCount.textContent = String(totals.reviewCount || 0);
   elements.appOverviewDoneCount.textContent = String(totals.doneCount || 0);
 
+  if (!currentProject) {
+    elements.appVersionOverviewList.innerHTML = createEmptyStateMarkup(
+      "还没有项目",
+      "请先在项目管理里创建项目，再到这里查看对应项目下的 App 版本进度。"
+    );
+    return;
+  }
+
   if (!appSummaries.length) {
     elements.appVersionOverviewList.innerHTML = createEmptyStateMarkup(
       "还没有 App",
-      "先到版本详情页创建应用，然后再回来查看整体发布分布。"
+      `项目“${currentProject.name}”下还没有 App，先到 App 版本管理页创建应用。`
     );
     return;
   }
@@ -3616,15 +3970,19 @@ function renderAppOverview() {
 }
 
 function renderAppDetails() {
+  const currentProject = state.workspace.currentProject;
   const apps = state.appWorkspace.apps;
   const currentApp = state.appWorkspace.currentApp;
   const isAppCreateMode =
     state.ui.appFormMode === "create" || !currentApp || !state.ui.editingAppId;
 
+  elements.appDetailProjectName.textContent = currentProject?.name || "暂无项目";
   elements.appDetailAppCountBadge.textContent = `${apps.length} 个 App`;
   elements.appDetailAppSelect.innerHTML = buildProjectOptions(apps, "暂无 App");
   elements.appDetailAppSelect.value = currentApp?.id || "";
   elements.appDetailAppSelect.disabled = !apps.length;
+  elements.appDetailAppPanelButton.disabled = !currentProject;
+  elements.appDetailVersionPanelButton.disabled = !currentApp;
 
   elements.appIdInput.value = isAppCreateMode ? "" : currentApp?.id || "";
   elements.appNameInput.value = isAppCreateMode ? "" : currentApp?.name || "";
@@ -3634,15 +3992,19 @@ function renderAppDetails() {
   elements.appDescriptionInput.value = isAppCreateMode ? "" : currentApp?.description || "";
   elements.appSubmitButton.textContent = isAppCreateMode ? "创建 App" : "保存 App";
   elements.appArchiveButton.textContent = currentApp?.archived ? "取消归档" : "归档 App";
-  elements.appArchiveButton.disabled = !currentApp || isAppCreateMode;
-  elements.appDeleteButton.disabled = !currentApp || isAppCreateMode;
+  elements.appArchiveButton.disabled = !currentApp || isAppCreateMode || !currentProject;
+  elements.appDeleteButton.disabled = !currentApp || isAppCreateMode || !currentProject;
+  setFormDisabled(elements.appForm, !currentProject);
 
-  if (!currentApp) {
-    elements.appFormCopy.textContent = "当前没有 App，先创建一个应用作为版本容器。";
+  if (!currentProject) {
+    elements.appFormCopy.textContent =
+      "请先到“项目管理”模块选择项目，再在该项目下维护 App。";
+  } else if (!currentApp) {
+    elements.appFormCopy.textContent = `项目“${currentProject.name}”下还没有 App，先创建一个应用作为版本容器。`;
   } else if (isAppCreateMode) {
-    elements.appFormCopy.textContent = `正在创建新 App。当前版本列表仍显示应用“${currentApp.name}”的内容。`;
+    elements.appFormCopy.textContent = `正在为项目“${currentProject.name}”创建新 App。当前版本列表仍显示应用“${currentApp.name}”的内容。`;
   } else {
-    elements.appFormCopy.textContent = `当前正在编辑 App “${currentApp.name}”，可以修改平台、颜色、标识和说明。`;
+    elements.appFormCopy.textContent = `当前正在编辑项目“${currentProject.name}”下的 App “${currentApp.name}”，可以修改平台、颜色、标识和说明。`;
   }
 
   renderVersionEditor();
@@ -3652,6 +4014,7 @@ function renderAppDetails() {
 }
 
 function renderVersionEditor() {
+  const currentProject = state.workspace.currentProject;
   const currentApp = state.appWorkspace.currentApp;
   const versions = sortVersionsForDisplay(state.appWorkspace.versions);
   const editingVersion =
@@ -3659,8 +4022,8 @@ function renderVersionEditor() {
 
   elements.versionEditorModeBadge.textContent = editingVersion ? "编辑版本" : "新版本";
   elements.versionAppHint.textContent = currentApp
-    ? `当前 App：${currentApp.name}。这里可以维护版本号、渠道、状态、优先级、日期和发布备注。`
-    : "请先通过“App 管理”创建或选择 App，再在这里录入版本。";
+    ? `当前项目：${currentProject?.name || "未选择"}，当前 App：${currentApp.name}。这里可以维护版本号、渠道、状态、优先级、日期和发布备注。`
+    : "请先选择项目和 App，再在这里录入版本。";
   elements.versionIdInput.value = editingVersion?.id || "";
   elements.versionNameInput.value = editingVersion?.versionName || "";
   elements.buildNumberInput.value = editingVersion?.buildNumber || "";
@@ -3688,7 +4051,10 @@ function renderAppDetailPanels() {
 
   document.body.classList.toggle(
     "detail-panel-open",
-    isPanelOpen || Boolean(state.ui.activeTool === "details" && state.ui.activeDetailPanel)
+    isPanelOpen ||
+      Boolean(state.ui.activeTool === "details" && state.ui.activeDetailPanel) ||
+      state.ui.projectEditDialogOpen ||
+      state.ui.projectCreateDialogOpen
   );
   elements.appDetailPanelBackdrop.hidden = !isPanelOpen;
   elements.appDetailAppPanel.hidden = !isAppPanelOpen;
@@ -3697,6 +4063,13 @@ function renderAppDetailPanels() {
   elements.appDetailVersionPanel.setAttribute("aria-hidden", String(!isVersionPanelOpen));
   elements.appDetailAppPanelButton.setAttribute("aria-expanded", String(isAppPanelOpen));
   elements.appDetailVersionPanelButton.setAttribute("aria-expanded", String(isVersionPanelOpen));
+}
+
+function renderProjectCreateDialog() {
+  const isOpen = state.ui.projectCreateDialogOpen;
+  elements.projectCreateDialogBackdrop.hidden = !isOpen;
+  elements.projectCreateDialog.hidden = !isOpen;
+  elements.projectCreateDialog.setAttribute("aria-hidden", String(!isOpen));
 }
 
 function renderVersionFilterControls() {
@@ -3717,6 +4090,7 @@ function renderVersionFilterControls() {
 }
 
 function renderVersionListPanel() {
+  const currentProject = state.workspace.currentProject;
   const currentApp = state.appWorkspace.currentApp;
   const versions = sortVersionsForDisplay(state.appWorkspace.versions);
   const filteredVersions = getFilteredAppVersions(versions);
@@ -3746,12 +4120,22 @@ function renderVersionListPanel() {
     ? `${buildAppMetaCopy(currentApp, versions)}${
         isFilterActive ? ` 当前筛选后显示 ${filteredVersions.length} 个版本。` : ""
       }`
-    : "这里会列出当前 App 的全部版本、状态和发布时间信息。";
+    : currentProject
+      ? `这里会列出项目“${currentProject.name}”下当前 App 的全部版本、状态和发布时间信息。`
+      : "这里会列出当前项目下 App 的全部版本、状态和发布时间信息。";
+
+  if (!currentProject) {
+    elements.versionDetailList.innerHTML = createEmptyStateMarkup(
+      "还没有项目",
+      "请先到“项目管理”模块选择或创建项目，再到这里管理 App 和版本。"
+    );
+    return;
+  }
 
   if (!currentApp) {
     elements.versionDetailList.innerHTML = createEmptyStateMarkup(
       "还没有 App",
-      "先通过“App 管理”创建应用，然后再在这里查看和维护版本。"
+      `项目“${currentProject.name}”下还没有 App，先通过“App 管理”创建应用。`
     );
     return;
   }
@@ -3974,8 +4358,8 @@ function renderAuth() {
   const isBusy = state.auth.loading || state.auth.submitting;
 
   elements.authCopy.textContent = isLoggedIn
-    ? "当前账号会话已建立，任务管理、App 版本管理、数据工具和总览都会直接连接云端工作区。"
-    : "当前未登录，任务管理和 App 版本管理会使用浏览器本地游客工作区。登录后将切换到账号云端。";
+    ? "当前账号会话已建立，项目管理、任务管理和 App 版本管理都会直接连接云端工作区。"
+    : "当前未登录，项目管理、任务管理和 App 版本管理会使用浏览器本地游客工作区。登录后将切换到账号云端。";
 
   elements.authModeButtons.forEach((button) => {
     const isActive = button.dataset.authMode === state.auth.mode;
@@ -4023,6 +4407,8 @@ function renderDataTools() {
   const guestSummary = getMeaningfulGuestSummary(state.guestWorkspace);
   const hasProjects = projects.length > 0;
   const visibleProjectCount = state.workspace.overview?.totals?.projectCount || projects.length;
+  const visibleAppCount = state.workspace.overview?.totals?.appCount || 0;
+  const visibleVersionCount = state.workspace.overview?.totals?.versionCount || 0;
 
   elements.projectSelect.innerHTML = buildProjectOptions(projects, "暂无项目");
   elements.projectSelect.value = currentProject?.id || "";
@@ -4035,8 +4421,8 @@ function renderDataTools() {
   elements.dataProjectCount.textContent = String(visibleProjectCount);
   elements.dataTaskCount.textContent = String(state.workspace.tasks.length);
   elements.dataTagCount.textContent = String(state.workspace.tags.length);
-  elements.dataAppCount.textContent = String(state.appWorkspace.apps.length);
-  elements.dataVersionCount.textContent = String(state.appWorkspace.versions.length);
+  elements.dataAppCount.textContent = String(visibleAppCount);
+  elements.dataVersionCount.textContent = String(visibleVersionCount);
   elements.dataDoneCount.textContent = String(doneCount);
 
   elements.exportJsonButton.disabled = !canExportCurrentProject();
@@ -4054,10 +4440,10 @@ function renderDataTools() {
       ? `浏览器本地还保留 ${guestSummary.projectCount} 个游客项目、${guestSummary.taskCount} 项任务、${guestSummary.tagCount} 个标签，以及 ${guestSummary.appCount} 个 App、${guestSummary.versionCount} 个版本。`
       : "浏览器本地没有额外游客数据，当前仅保留默认本地收件箱占位。";
   const projectMessage = currentProject
-    ? `当前项目“${currentProject.name}”可用于导出和清空已完成任务；工作区导出会同时带上 App 版本数据。`
-    : state.appWorkspace.apps.length > 0
-      ? "当前还没有任务项目；如果现在只管理 App 版本，可直接使用工作区导出。"
-      : "请先导入 JSON、载入示例数据，或先创建任务项目与 App。";
+    ? `当前项目“${currentProject.name}”可用于导出和清空已完成任务；项目导出会同时带上该项目下的 App 版本数据。`
+    : visibleAppCount > 0
+      ? "当前还没有选中项目；如果现在只想查看整体数据，可直接使用工作区导出。"
+      : "请先导入 JSON、载入示例数据，或先在项目管理中创建项目。";
 
   elements.dataGuestSummary.textContent = `${workspaceMessage}${guestMessage}${projectMessage}`;
 }
@@ -4067,8 +4453,8 @@ function renderUtilities() {
   const tasks = sortTasksForDisplay(state.workspace.tasks);
   const pendingTasks = tasks.filter((task) => task.status !== "done");
   const modeLabel = state.workspace.mode === "cloud" ? "云端账号模式" : "游客本地模式";
-  const totalApps = state.appWorkspace.apps.length;
-  const totalVersions = state.appWorkspace.overview?.totals?.versionCount || 0;
+  const totalApps = state.workspace.overview?.totals?.appCount || 0;
+  const totalVersions = state.workspace.overview?.totals?.versionCount || 0;
 
   elements.utilityWorkspaceMode.textContent = modeLabel;
   elements.utilityCurrentProject.textContent = currentProject ? currentProject.name : "未选择";
@@ -4200,19 +4586,29 @@ function buildGuestWorkspaceOverview(workspace) {
   });
 
   const totals = createEmptyStatusSummary();
+  totals.appCount = 0;
+  totals.versionCount = 0;
   const projectSummaries = projects.map((project) => {
     const projectTasks = tasksByProjectId.get(project.id) || [];
+    const projectApps = normalizedWorkspace.apps.filter((app) => app.projectId === project.id);
     const summary = summarizeTasks(projectTasks);
+    const versionCount = normalizedWorkspace.versions.filter((version) =>
+      projectApps.some((app) => app.id === version.appId)
+    ).length;
 
     totals.taskCount += summary.taskCount;
     totals.todoCount += summary.todoCount;
     totals.doingCount += summary.doingCount;
     totals.reviewCount += summary.reviewCount;
     totals.doneCount += summary.doneCount;
+    totals.appCount += projectApps.length;
+    totals.versionCount += versionCount;
 
     return {
       ...project,
       ...summary,
+      appCount: projectApps.length,
+      versionCount,
       recentTasks: sortTasksByRecent(projectTasks).slice(0, 3).map((task) => ({
         id: task.id,
         title: task.title,
@@ -4235,9 +4631,11 @@ function buildGuestWorkspaceOverview(workspace) {
   };
 }
 
-function buildGuestAppWorkspaceOverview(workspace) {
+function buildGuestAppWorkspaceOverview(workspace, projectId) {
   const normalizedWorkspace = normalizeGuestWorkspace(workspace);
-  const apps = sortProjects(normalizedWorkspace.apps);
+  const apps = sortProjects(
+    normalizedWorkspace.apps.filter((app) => app.projectId === projectId)
+  );
   const versionsByAppId = new Map();
 
   normalizedWorkspace.versions.forEach((version) => {
@@ -4296,6 +4694,8 @@ function normalizeOverviewPayload(payload) {
           ...project,
           archived: Boolean(project.archived),
           taskCount: Number(project.taskCount) || 0,
+          appCount: Number(project.appCount) || 0,
+          versionCount: Number(project.versionCount) || 0,
           todoCount: Number(project.todoCount) || 0,
           doingCount: Number(project.doingCount) || 0,
           reviewCount: Number(project.reviewCount) || 0,
@@ -4311,6 +4711,8 @@ function normalizeOverviewPayload(payload) {
       activeProjectCount: Number(totals.activeProjectCount) || 0,
       archivedProjectCount: Number(totals.archivedProjectCount) || 0,
       taskCount: Number(totals.taskCount) || 0,
+      appCount: Number(totals.appCount) || 0,
+      versionCount: Number(totals.versionCount) || 0,
       todoCount: Number(totals.todoCount) || 0,
       doingCount: Number(totals.doingCount) || 0,
       reviewCount: Number(totals.reviewCount) || 0,
@@ -4327,6 +4729,8 @@ function createEmptyOverview() {
       activeProjectCount: 0,
       archivedProjectCount: 0,
       taskCount: 0,
+      appCount: 0,
+      versionCount: 0,
       todoCount: 0,
       doingCount: 0,
       reviewCount: 0,
@@ -4393,24 +4797,20 @@ async function buildWorkspaceExportPayload() {
     return buildGuestWorkspaceExportPayload(state.guestWorkspace);
   }
 
-  const [projectPayloads, appPayloads] = await Promise.all([
-    Promise.all(state.workspace.projects.map((project) => buildProjectExportPayload(project.id))),
-    Promise.all(state.appWorkspace.apps.map((app) => buildAppExportPayload(app.id))),
-  ]);
+  const projectPayloads = await Promise.all(
+    state.workspace.projects.map((project) => buildProjectExportPayload(project.id))
+  );
 
   return {
     source: "task-atlas",
-    version: 3,
+    version: 4,
     scope: "workspace",
     exportedAt: new Date().toISOString(),
     projects: projectPayloads.map((payload) => ({
       project: payload.project || {},
       tags: Array.isArray(payload.tags) ? payload.tags : [],
       tasks: Array.isArray(payload.tasks) ? payload.tasks : [],
-    })),
-    apps: appPayloads.map((payload) => ({
-      app: payload.app || {},
-      versions: Array.isArray(payload.versions) ? payload.versions : [],
+      apps: Array.isArray(payload.apps) ? payload.apps : [],
     })),
   };
 }
@@ -4433,7 +4833,11 @@ async function buildAppExportPayload(appId) {
   }
 
   if (state.appWorkspace.mode === "cloud") {
-    return apiRequest(`/api/apps/${appId}/export`);
+    const currentProjectId = state.workspace.currentProjectId;
+    if (!currentProjectId) {
+      throw new Error("项目不存在");
+    }
+    return apiRequest(`/api/projects/${currentProjectId}/apps/${appId}/export`);
   }
 
   return buildGuestAppExportPayload(state.guestWorkspace, appId);
@@ -4447,25 +4851,29 @@ async function importPayloadToCloud(payload) {
     throw new Error("暂不支持当前 JSON 结构");
   }
 
-  const [projectResult, appResult] = await Promise.all([
-    containsProjectData
-      ? apiRequest("/api/import/json", {
-          method: "POST",
-          body: payload,
-        })
-      : Promise.resolve({ importedProjects: [], importedCount: 0 }),
-    containsAppData
-      ? apiRequest("/api/apps/import/json", {
-          method: "POST",
-          body: payload,
-        })
-      : Promise.resolve({ importedApps: [], importedCount: 0 }),
-  ]);
+  if (containsProjectData) {
+    const projectResult = await apiRequest("/api/import/json", {
+      method: "POST",
+      body: payload,
+    });
+
+    return {
+      importedProject: projectResult.importedProjects?.at(-1) || null,
+      importedApp: null,
+      importedProjectCount: Number(projectResult.importedCount) || 0,
+      importedAppCount: Number(projectResult.importedAppCount) || 0,
+    };
+  }
+
+  const appResult = await apiRequest("/api/apps/import/json", {
+    method: "POST",
+    body: payload,
+  });
 
   return {
-    importedProject: projectResult.importedProjects?.at(-1) || null,
+    importedProject: appResult.importedProjects?.at(-1) || null,
     importedApp: appResult.importedApps?.at(-1) || null,
-    importedProjectCount: Number(projectResult.importedCount) || 0,
+    importedProjectCount: Number(appResult.importedProjects?.length) || 0,
     importedAppCount: Number(appResult.importedCount) || 0,
   };
 }
@@ -4479,7 +4887,19 @@ function payloadContainsProjectData(payload) {
     return Array.isArray(payload.projects) && payload.projects.length > 0;
   }
 
-  return Boolean((payload.scope === "project" || payload.project) && payload.project);
+  if (payload.scope === "project") {
+    return Boolean(payload.project);
+  }
+
+  if (!payload.scope && payload.project) {
+    return (
+      Array.isArray(payload.tasks) ||
+      Array.isArray(payload.tags) ||
+      Array.isArray(payload.apps)
+    );
+  }
+
+  return false;
 }
 
 function payloadContainsAppData(payload) {
@@ -4488,10 +4908,30 @@ function payloadContainsAppData(payload) {
   }
 
   if (payload.scope === "workspace") {
+    return (
+      (Array.isArray(payload.apps) && payload.apps.length > 0) ||
+      (Array.isArray(payload.projects) &&
+        payload.projects.some((project) => Array.isArray(project.apps) && project.apps.length > 0))
+    );
+  }
+
+  if (payload.scope === "app") {
+    return Boolean(payload.app);
+  }
+
+  if (payload.scope === "project") {
     return Array.isArray(payload.apps) && payload.apps.length > 0;
   }
 
-  return Boolean((payload.scope === "app" || payload.app) && payload.app);
+  if (!payload.scope && payload.app) {
+    return true;
+  }
+
+  if (!payload.scope && payload.project) {
+    return Array.isArray(payload.apps) && payload.apps.length > 0;
+  }
+
+  return Boolean(payload.app);
 }
 
 function buildImportResultMessage(result) {
@@ -4511,12 +4951,9 @@ function buildImportResultMessage(result) {
 function buildWorkspaceSummaryText() {
   const overview = state.workspace.overview || createEmptyOverview();
   const totals = overview.totals || createEmptyOverview().totals;
-  const appOverview = state.appWorkspace.overview || createEmptyAppOverview();
-  const appTotals = appOverview.totals || createEmptyAppOverview().totals;
   const currentProject = state.workspace.currentProject;
   const currentApp = state.appWorkspace.currentApp;
   const projects = Array.isArray(overview.projects) ? overview.projects : [];
-  const apps = Array.isArray(appOverview.apps) ? appOverview.apps : [];
   const lines = [
     "Task Atlas 工作区摘要",
     `生成时间：${formatDateTime(new Date().toISOString())}`,
@@ -4529,12 +4966,8 @@ function buildWorkspaceSummaryText() {
     `状态分布：未开始 ${totals.todoCount || 0} / 进行中 ${totals.doingCount || 0} / 待验收 ${
       totals.reviewCount || 0
     } / 已完成 ${totals.doneCount || 0}`,
-    `App 总数：${appTotals.appCount || 0}`,
-    `活跃 App：${appTotals.activeAppCount || 0}`,
-    `版本总数：${appTotals.versionCount || 0}`,
-    `版本分布：待规划 ${appTotals.todoCount || 0} / 开发中 ${appTotals.doingCount || 0} / 待发布 ${
-      appTotals.reviewCount || 0
-    } / 已发布 ${appTotals.doneCount || 0}`,
+    `App 总数：${totals.appCount || 0}`,
+    `版本总数：${totals.versionCount || 0}`,
   ];
 
   if (currentProject) {
@@ -4548,22 +4981,9 @@ function buildWorkspaceSummaryText() {
       lines.push(
         `${index + 1}. ${project.name}${project.archived ? " [已归档]" : ""}：${
           project.taskCount
-        } 项任务（未开始 ${project.todoCount} / 进行中 ${project.doingCount} / 待验收 ${
-          project.reviewCount
-        } / 已完成 ${project.doneCount}）`
-      );
-    });
-  }
-
-  if (apps.length) {
-    lines.push("", "App 清单：");
-    apps.forEach((app, index) => {
-      lines.push(
-        `${index + 1}. ${app.name}${app.archived ? " [已归档]" : ""}：${
-          app.versionCount
-        } 个版本（待规划 ${app.todoCount} / 开发中 ${app.doingCount} / 待发布 ${
-          app.reviewCount
-        } / 已发布 ${app.doneCount}）`
+        } 项任务，${project.appCount || 0} 个 App，${project.versionCount || 0} 个版本（未开始 ${
+          project.todoCount
+        } / 进行中 ${project.doingCount} / 待验收 ${project.reviewCount} / 已完成 ${project.doneCount}）`
       );
     });
   }
@@ -4579,6 +4999,16 @@ function buildCurrentProjectSummaryText() {
 
   const tasks = sortTasksForDisplay(state.workspace.tasks);
   const summary = summarizeTasks(tasks);
+  const projectApps = state.appWorkspace.projectId === currentProject.id ? state.appWorkspace.apps : [];
+  const projectVersions =
+    state.workspace.mode === "cloud"
+      ? state.appWorkspace.overview?.totals?.versionCount || 0
+      : projectApps.reduce(
+          (count, app) =>
+            count +
+            state.guestWorkspace.versions.filter((version) => version.appId === app.id).length,
+          0
+        );
   const lines = [
     `项目摘要：${currentProject.name}`,
     `生成时间：${formatDateTime(new Date().toISOString())}`,
@@ -4586,6 +5016,8 @@ function buildCurrentProjectSummaryText() {
     `项目状态：${currentProject.archived ? "已归档" : "活跃"}`,
     `标签数量：${state.workspace.tags.length}`,
     `任务总数：${summary.taskCount}`,
+    `App 数量：${projectApps.length}`,
+    `版本数量：${projectVersions}`,
     `状态分布：未开始 ${summary.todoCount} / 进行中 ${summary.doingCount} / 待验收 ${summary.reviewCount} / 已完成 ${summary.doneCount}`,
     `项目说明补充：${buildProjectMetaCopy(currentProject, tasks)}`,
   ];
@@ -4826,10 +5258,11 @@ function setFormDisabled(form, disabled) {
   });
 }
 
-function createGuestAppRecord(payload) {
+function createGuestAppRecord(projectId, payload) {
   const now = new Date().toISOString();
   return {
     id: createId(),
+    projectId,
     name: String(payload.name || "未命名 App").trim() || "未命名 App",
     description: String(payload.description || "").trim(),
     color: normalizeHexColor(payload.color, "#245a73"),
@@ -5018,6 +5451,8 @@ function touchGuestApp(workspace, appId, timestamp) {
     return;
   }
 
+  const app = workspace.apps.find((item) => item.id === appId);
+
   workspace.apps = workspace.apps.map((app) =>
     app.id === appId
       ? {
@@ -5026,6 +5461,10 @@ function touchGuestApp(workspace, appId, timestamp) {
         }
       : app
   );
+
+  if (app?.projectId) {
+    touchGuestProject(workspace, app.projectId, timestamp);
+  }
 }
 
 function sortTags(tags) {
@@ -5099,7 +5538,7 @@ function getMeaningfulGuestSummary(workspace) {
     projectCount: meaningfulProjects.length,
     taskCount: workspace.tasks.length,
     tagCount: workspace.tags.length,
-    appCount: workspace.apps.length,
+    appCount: workspace.apps.filter((app) => meaningfulProjects.some((project) => project.id === app.projectId)).length,
     versionCount: workspace.versions.length,
   };
 }
@@ -5160,7 +5599,7 @@ function updateGuestWorkspace(mutator, options = {}) {
 
 function normalizeGuestWorkspace(workspace) {
   const normalizedWorkspace = workspace && typeof workspace === "object" ? workspace : {};
-  normalizedWorkspace.version = 3;
+  normalizedWorkspace.version = 4;
   normalizedWorkspace.importedUsers = Array.isArray(normalizedWorkspace.importedUsers)
     ? normalizedWorkspace.importedUsers.map((userId) => String(userId))
     : [];
@@ -5184,12 +5623,35 @@ function normalizeGuestWorkspace(workspace) {
     normalizedWorkspace.projects = [createDefaultGuestProject()];
   }
 
-  const validProjectIds = new Set(normalizedWorkspace.projects.map((project) => project.id));
+  let validProjectIds = new Set(normalizedWorkspace.projects.map((project) => project.id));
+  const hasLegacyApps = normalizedWorkspace.apps.some((app) => !validProjectIds.has(app.projectId));
+  if (hasLegacyApps) {
+    let migrationProject = normalizedWorkspace.projects.find(
+      (project) => project.name === LEGACY_APP_MIGRATION_PROJECT_NAME
+    );
+    if (!migrationProject) {
+      migrationProject = createLegacyGuestAppMigrationProject();
+      normalizedWorkspace.projects.unshift(migrationProject);
+    }
+    validProjectIds = new Set(normalizedWorkspace.projects.map((project) => project.id));
+    normalizedWorkspace.apps = normalizedWorkspace.apps.map((app) =>
+      validProjectIds.has(app.projectId)
+        ? app
+        : {
+            ...app,
+            projectId: migrationProject.id,
+          }
+    );
+  }
+
   normalizedWorkspace.tags = normalizedWorkspace.tags.filter((tag) =>
     validProjectIds.has(tag.projectId)
   );
   normalizedWorkspace.tasks = normalizedWorkspace.tasks.filter((task) =>
     validProjectIds.has(task.projectId)
+  );
+  normalizedWorkspace.apps = normalizedWorkspace.apps.filter((app) =>
+    validProjectIds.has(app.projectId)
   );
   const validAppIds = new Set(normalizedWorkspace.apps.map((app) => app.id));
   normalizedWorkspace.versions = normalizedWorkspace.versions.filter((version) =>
@@ -5214,7 +5676,7 @@ function normalizeGuestWorkspace(workspace) {
 function createEmptyGuestWorkspace() {
   const project = createDefaultGuestProject();
   return {
-    version: 3,
+    version: 4,
     importedUsers: [],
     currentProjectId: project.id,
     currentAppId: null,
@@ -5233,6 +5695,19 @@ function createDefaultGuestProject() {
     name: DEFAULT_PROJECT_NAME,
     description: DEFAULT_PROJECT_DESCRIPTION,
     color: "#c16b39",
+    archived: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function createLegacyGuestAppMigrationProject() {
+  const now = new Date().toISOString();
+  return {
+    id: createId(),
+    name: LEGACY_APP_MIGRATION_PROJECT_NAME,
+    description: LEGACY_APP_MIGRATION_PROJECT_DESCRIPTION,
+    color: "#245a73",
     archived: false,
     createdAt: now,
     updatedAt: now,
@@ -5301,6 +5776,7 @@ function normalizeGuestTask(task) {
 function normalizeGuestApp(app) {
   return {
     id: String(app.id || createId()),
+    projectId: String(app.projectId || ""),
     name: String(app.name || "未命名 App").trim() || "未命名 App",
     description: String(app.description || "").trim(),
     color: normalizeHexColor(app.color, "#245a73"),
@@ -5361,7 +5837,8 @@ function guestProjectHasMeaningfulData(workspace, projectId) {
 
   const hasTaskData = workspace.tasks.some((task) => task.projectId === projectId);
   const hasTagData = workspace.tags.some((tag) => tag.projectId === projectId);
-  if (hasTaskData || hasTagData) {
+  const hasAppData = workspace.apps.some((app) => app.projectId === projectId);
+  if (hasTaskData || hasTagData || hasAppData) {
     return true;
   }
 
@@ -5458,7 +5935,7 @@ function buildDemoWorkspacePayload() {
 
   return {
     source: "task-atlas",
-    version: 3,
+    version: 4,
     scope: "workspace",
     exportedAt: new Date().toISOString(),
     projects: [
@@ -5504,6 +5981,32 @@ function buildDemoWorkspacePayload() {
             ],
           },
         ],
+        apps: [
+          {
+            app: {
+              name: "Task Atlas Web",
+              description: "Web 端版本演示数据，用于验证项目维度下的 App 管理。",
+              color: "#c16b39",
+              platform: "web",
+              bundleId: "web.taskatlas.app",
+              archived: false,
+            },
+            versions: [
+              {
+                versionName: "1.9.0",
+                buildNumber: "19003",
+                description: "准备接入版本中心和变更日志入口。",
+                notes: "先完成内部包，再推进 Beta 验证。",
+                owner: "Mila",
+                channel: "internal",
+                status: "doing",
+                priority: "medium",
+                plannedDate: plus(-1),
+                releaseDate: plus(5),
+              },
+            ],
+          },
+        ],
       },
       {
         project: {
@@ -5532,67 +6035,43 @@ function buildDemoWorkspacePayload() {
             ],
           },
         ],
-      },
-    ],
-    apps: [
-      {
-        app: {
-          name: "Task Atlas iOS",
-          description: "移动端版本演示数据，覆盖开发、待发布和已发布节奏。",
-          color: "#245a73",
-          platform: "ios",
-          bundleId: "com.taskatlas.ios",
-          archived: false,
-        },
-        versions: [
+        apps: [
           {
-            versionName: "2.4.0",
-            buildNumber: "24015",
-            description: "补齐仪表盘发布页和版本入口联动。",
-            notes: "上线前需要确认审核素材和灰度回滚方案。",
-            owner: "Ethan",
-            channel: "gray",
-            status: "review",
-            priority: "high",
-            plannedDate: plus(-3),
-            releaseDate: plus(1),
-          },
-          {
-            versionName: "2.3.2",
-            buildNumber: "23208",
-            description: "修复登录态丢失和启动页白屏问题。",
-            notes: "这是一个 Hotfix 版本，保持最小改动上线。",
-            owner: "Luna",
-            channel: "hotfix",
-            status: "done",
-            priority: "urgent",
-            plannedDate: plus(-7),
-            releaseDate: plus(-4),
-            publishedDate: plus(-4),
-          },
-        ],
-      },
-      {
-        app: {
-          name: "Task Atlas Web",
-          description: "Web 端版本演示数据，用于验证渠道和版本状态筛选。",
-          color: "#c16b39",
-          platform: "web",
-          bundleId: "web.taskatlas.app",
-          archived: false,
-        },
-        versions: [
-          {
-            versionName: "1.9.0",
-            buildNumber: "19003",
-            description: "准备接入版本中心和变更日志入口。",
-            notes: "先完成内部包，再推进 Beta 验证。",
-            owner: "Mila",
-            channel: "internal",
-            status: "doing",
-            priority: "medium",
-            plannedDate: plus(-1),
-            releaseDate: plus(5),
+            app: {
+              name: "Task Atlas iOS",
+              description: "移动端版本演示数据，覆盖开发、待发布和已发布节奏。",
+              color: "#245a73",
+              platform: "ios",
+              bundleId: "com.taskatlas.ios",
+              archived: false,
+            },
+            versions: [
+              {
+                versionName: "2.4.0",
+                buildNumber: "24015",
+                description: "补齐仪表盘发布页和版本入口联动。",
+                notes: "上线前需要确认审核素材和灰度回滚方案。",
+                owner: "Ethan",
+                channel: "gray",
+                status: "review",
+                priority: "high",
+                plannedDate: plus(-3),
+                releaseDate: plus(1),
+              },
+              {
+                versionName: "2.3.2",
+                buildNumber: "23208",
+                description: "修复登录态丢失和启动页白屏问题。",
+                notes: "这是一个 Hotfix 版本，保持最小改动上线。",
+                owner: "Luna",
+                channel: "hotfix",
+                status: "done",
+                priority: "urgent",
+                plannedDate: plus(-7),
+                releaseDate: plus(-4),
+                publishedDate: plus(-4),
+              },
+            ],
           },
         ],
       },
@@ -5607,13 +6086,12 @@ function buildGuestWorkspaceExportPayload(workspace) {
 
   return {
     source: "task-atlas",
-    version: 3,
+    version: 4,
     scope: "workspace",
     exportedAt: new Date().toISOString(),
     projects: exportableProjects.map((project) =>
       buildGuestProjectExportPayload(workspace, project.id)
     ),
-    apps: workspace.apps.map((app) => buildGuestAppExportPayload(workspace, app.id)),
   };
 }
 
@@ -5626,10 +6104,11 @@ function buildGuestProjectExportPayload(workspace, projectId) {
   const tags = workspace.tags.filter((tag) => tag.projectId === projectId);
   const tagMap = new Map(tags.map((tag) => [tag.id, tag]));
   const tasks = workspace.tasks.filter((task) => task.projectId === projectId);
+  const apps = workspace.apps.filter((app) => app.projectId === projectId);
 
   return {
     source: "task-atlas",
-    version: 2,
+    version: 4,
     scope: "project",
     exportedAt: new Date().toISOString(),
     project: {
@@ -5661,6 +6140,7 @@ function buildGuestProjectExportPayload(workspace, projectId) {
         completed: subtask.completed,
       })),
     })),
+    apps: apps.map((app) => buildGuestAppExportPayload(workspace, app.id)),
   };
 }
 
@@ -5670,13 +6150,22 @@ function buildGuestAppExportPayload(workspace, appId) {
     throw new Error("App 不存在");
   }
 
+  const project = workspace.projects.find((item) => item.id === app.projectId) || null;
   const versions = workspace.versions.filter((version) => version.appId === appId);
 
   return {
     source: "task-atlas",
-    version: 3,
+    version: 4,
     scope: "app",
     exportedAt: new Date().toISOString(),
+    project: project
+      ? {
+          name: project.name,
+          description: project.description,
+          color: project.color,
+          archived: project.archived,
+        }
+      : undefined,
     app: {
       name: app.name,
       description: app.description,
@@ -5704,7 +6193,7 @@ function buildGuestAppExportPayload(workspace, appId) {
 function importPayloadIntoGuestWorkspace(workspace, payload) {
   const sourceWorkspace = workspace && typeof workspace === "object" ? deepClone(workspace) : {};
   let nextWorkspace = {
-    version: 3,
+    version: 4,
     importedUsers: Array.isArray(sourceWorkspace.importedUsers)
       ? sourceWorkspace.importedUsers.map((userId) => String(userId))
       : [],
@@ -5731,7 +6220,7 @@ function importPayloadIntoGuestWorkspace(workspace, payload) {
 
   if (isPlaceholderGuestWorkspace(nextWorkspace)) {
     nextWorkspace = {
-      version: 3,
+      version: 4,
       importedUsers: [],
       currentProjectId: null,
       currentAppId: null,
@@ -5751,14 +6240,23 @@ function importPayloadIntoGuestWorkspace(workspace, payload) {
     }
 
     if (Array.isArray(payload.apps)) {
+      const legacyProjectId = createGuestImportProject(nextWorkspace, {
+        name: inferGuestLegacyAppProjectName(payload.apps),
+        description: "自动承接旧版工作区 JSON 中独立 App 数据的项目。",
+        color: "#245a73",
+      });
       payload.apps.forEach((appPayload) => {
-        importAppPayloadIntoGuestWorkspace(nextWorkspace, appPayload);
+        importAppPayloadIntoGuestWorkspace(nextWorkspace, appPayload, legacyProjectId);
       });
     }
-  } else if ((payload.scope === "project" || payload.project) && payload.project) {
-    importProjectPayloadIntoGuestWorkspace(nextWorkspace, payload);
-  } else if ((payload.scope === "app" || payload.app) && payload.app) {
+  } else if ((payload.scope === "app" || (!payload.scope && payload.app)) && payload.app) {
     importAppPayloadIntoGuestWorkspace(nextWorkspace, payload);
+  } else if (
+    (payload.scope === "project" ||
+      (!payload.scope && payload.project && Array.isArray(payload.apps))) &&
+    payload.project
+  ) {
+    importProjectPayloadIntoGuestWorkspace(nextWorkspace, payload);
   } else {
     throw new Error("暂不支持当前 JSON 结构");
   }
@@ -5766,7 +6264,10 @@ function importPayloadIntoGuestWorkspace(workspace, payload) {
   nextWorkspace.importedUsers = [];
   nextWorkspace.currentProjectId =
     nextWorkspace.projects[0]?.id || nextWorkspace.currentProjectId || null;
-  nextWorkspace.currentAppId = nextWorkspace.apps[0]?.id || nextWorkspace.currentAppId || null;
+  nextWorkspace.currentAppId =
+    nextWorkspace.apps.find((app) => app.projectId === nextWorkspace.currentProjectId)?.id ||
+    nextWorkspace.currentAppId ||
+    null;
 
   return normalizeGuestWorkspace(nextWorkspace);
 }
@@ -5776,10 +6277,7 @@ function importProjectPayloadIntoGuestWorkspace(workspace, payload) {
   const tags = Array.isArray(payload.tags) ? payload.tags : [];
   const tasks = Array.isArray(payload.tasks) ? payload.tasks : [];
   const now = new Date().toISOString();
-  const projectId = createId();
-
-  workspace.projects.unshift({
-    id: projectId,
+  const projectId = createGuestImportProject(workspace, {
     name: String(projectData.name || "导入项目").trim() || "导入项目",
     description: String(projectData.description || "").trim(),
     color: normalizeHexColor(projectData.color, "#c16b39"),
@@ -5843,17 +6341,59 @@ function importProjectPayloadIntoGuestWorkspace(workspace, payload) {
     });
   });
 
+  if (Array.isArray(payload.apps)) {
+    payload.apps.forEach((appPayload) => {
+      importAppPayloadIntoGuestWorkspace(workspace, appPayload, projectId);
+    });
+  }
+
   workspace.currentProjectId = projectId;
 }
 
-function importAppPayloadIntoGuestWorkspace(workspace, payload) {
+function createGuestImportProject(workspace, payload = {}) {
+  const now = new Date().toISOString();
+  const projectId = createId();
+
+  workspace.projects.unshift({
+    id: projectId,
+    name: String(payload.name || "导入项目").trim() || "导入项目",
+    description: String(payload.description || "").trim(),
+    color: normalizeHexColor(payload.color, "#c16b39"),
+    archived: Boolean(payload.archived),
+    createdAt: payload.createdAt || now,
+    updatedAt: payload.updatedAt || payload.createdAt || now,
+  });
+
+  return projectId;
+}
+
+function inferGuestLegacyAppProjectName(apps) {
+  const firstAppName = apps[0]?.app?.name || apps[0]?.name || "";
+  return firstAppName ? `${String(firstAppName).trim()} 项目` : "导入应用项目";
+}
+
+function importAppPayloadIntoGuestWorkspace(workspace, payload, projectId = null) {
   const appData = payload.app || payload;
+  const projectData = payload.project || {};
   const versions = Array.isArray(payload.versions) ? payload.versions : [];
   const now = new Date().toISOString();
   const appId = createId();
+  const resolvedProjectId =
+    projectId ||
+    createGuestImportProject(workspace, {
+      name:
+        projectData.name ||
+        `${String(appData.name || "导入 App").trim() || "导入 App"} 项目`,
+      description: projectData.description || "自动承接独立 App 导入数据的项目。",
+      color: normalizeHexColor(projectData.color, "#245a73"),
+      archived: Boolean(projectData.archived),
+      createdAt: now,
+      updatedAt: now,
+    });
 
   workspace.apps.unshift({
     id: appId,
+    projectId: resolvedProjectId,
     name: String(appData.name || "导入 App").trim() || "导入 App",
     description: String(appData.description || "").trim(),
     color: normalizeHexColor(appData.color, "#245a73"),
@@ -5895,6 +6435,7 @@ function importAppPayloadIntoGuestWorkspace(workspace, payload) {
   });
 
   workspace.currentAppId = appId;
+  workspace.currentProjectId = resolvedProjectId;
 }
 
 async function apiRequest(url, options = {}) {
@@ -6133,6 +6674,7 @@ function createEmptyWorkspaceView(mode) {
 function createEmptyAppWorkspaceView(mode) {
   return {
     mode,
+    projectId: null,
     apps: [],
     currentAppId: null,
     currentApp: null,

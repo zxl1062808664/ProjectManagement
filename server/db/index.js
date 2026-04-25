@@ -1,10 +1,16 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { DatabaseSync } = require("node:sqlite");
 
 const databasePath = process.env.TASK_ATLAS_DB_PATH
   ? path.resolve(process.env.TASK_ATLAS_DB_PATH)
   : path.resolve(__dirname, "..", "..", "data", "task-atlas.sqlite");
+
+const LEGACY_APP_MIGRATION_PROJECT_NAME = "版本迁移项目";
+const LEGACY_APP_MIGRATION_PROJECT_DESCRIPTION =
+  "自动承接旧版独立 App 数据的迁移项目。";
+const LEGACY_APP_MIGRATION_PROJECT_COLOR = "#245a73";
 
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 
@@ -92,6 +98,7 @@ function initializeSchema() {
     CREATE TABLE IF NOT EXISTS apps (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       color TEXT NOT NULL DEFAULT '#245a73',
@@ -100,7 +107,8 @@ function initializeSchema() {
       archived INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS app_versions (
@@ -130,6 +138,7 @@ function initializeSchema() {
     CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id);
     CREATE INDEX IF NOT EXISTS idx_tags_project_id ON tags(project_id);
     CREATE INDEX IF NOT EXISTS idx_apps_user_id ON apps(user_id);
+    CREATE INDEX IF NOT EXISTS idx_apps_project_id ON apps(project_id);
     CREATE INDEX IF NOT EXISTS idx_app_versions_app_id ON app_versions(app_id);
   `);
 
@@ -137,6 +146,8 @@ function initializeSchema() {
   ensureColumn("tasks", "start_date", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("tasks", "completed_date", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("tasks", "notes", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("apps", "project_id", "TEXT NOT NULL DEFAULT ''");
+  migrateLegacyAppsToProjects();
 }
 
 function ensureColumn(tableName, columnName, columnDefinition) {
@@ -150,6 +161,80 @@ function ensureColumn(tableName, columnName, columnDefinition) {
   }
 
   db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
+}
+
+function migrateLegacyAppsToProjects() {
+  const users = db
+    .prepare(
+      `
+        SELECT DISTINCT user_id
+        FROM apps
+        WHERE COALESCE(project_id, '') = ''
+      `
+    )
+    .all()
+    .map((row) => row.user_id)
+    .filter(Boolean);
+
+  if (!users.length) {
+    return;
+  }
+
+  const selectProjectByNameStatement = db.prepare(`
+    SELECT id
+    FROM projects
+    WHERE user_id = ? AND name = ?
+    ORDER BY created_at ASC
+    LIMIT 1
+  `);
+  const insertProjectStatement = db.prepare(`
+    INSERT INTO projects (id, user_id, name, description, color, archived, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const selectLegacyAppsStatement = db.prepare(`
+    SELECT id
+    FROM apps
+    WHERE user_id = ? AND COALESCE(project_id, '') = ''
+  `);
+  const updateAppProjectStatement = db.prepare(`
+    UPDATE apps
+    SET project_id = ?, updated_at = ?
+    WHERE id = ?
+  `);
+
+  db.exec("BEGIN");
+  try {
+    users.forEach((userId) => {
+      const existingProject = selectProjectByNameStatement.get(
+        userId,
+        LEGACY_APP_MIGRATION_PROJECT_NAME
+      );
+      const now = new Date().toISOString();
+      const projectId = existingProject?.id || crypto.randomUUID();
+
+      if (!existingProject) {
+        insertProjectStatement.run(
+          projectId,
+          userId,
+          LEGACY_APP_MIGRATION_PROJECT_NAME,
+          LEGACY_APP_MIGRATION_PROJECT_DESCRIPTION,
+          LEGACY_APP_MIGRATION_PROJECT_COLOR,
+          0,
+          now,
+          now
+        );
+      }
+
+      selectLegacyAppsStatement.all(userId).forEach((row) => {
+        updateAppProjectStatement.run(projectId, now, row.id);
+      });
+    });
+
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 module.exports = {

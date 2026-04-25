@@ -47,8 +47,9 @@ test("GET / serves the frontend shell", async () => {
 
     assert.equal(response.status, 200);
     assert.match(html, /Task Atlas \| 任务与版本管理/);
+    assert.match(html, /项目管理/);
     assert.match(html, /任务总览/);
-    assert.match(html, /任务详情/);
+    assert.match(html, /任务管理/);
     assert.match(html, /App 版本管理/);
     assert.match(html, /版本总览/);
     assert.match(html, /版本详情/);

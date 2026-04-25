@@ -31,29 +31,60 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     const sessionCookie = registerResponse.headers.get("set-cookie");
     assert.match(sessionCookie, /task_atlas_session=/);
 
-    const initialAppsResponse = await request(baseUrl, "/api/apps", {
+    const initialProjectsResponse = await request(baseUrl, "/api/projects", {
       cookie: sessionCookie,
     });
-    assert.equal(initialAppsResponse.status, 200);
-    assert.equal(initialAppsResponse.body.apps.length, 0);
+    assert.equal(initialProjectsResponse.status, 200);
+    assert.equal(initialProjectsResponse.body.projects.length, 1);
 
-    const createdAppResponse = await request(baseUrl, "/api/apps", {
+    const defaultProject = initialProjectsResponse.body.projects[0];
+
+    const createdProjectResponse = await request(baseUrl, "/api/projects", {
       method: "POST",
       cookie: sessionCookie,
       body: {
-        name: "Task Atlas iOS",
-        description: "移动端主应用",
+        name: "移动发布项目",
+        description: "统一承接 iOS 版本发布",
         color: "#245a73",
-        platform: "ios",
-        bundleId: "com.taskatlas.ios",
       },
     });
+    const createdProject = createdProjectResponse.body.project;
+
+    assert.equal(createdProjectResponse.status, 201);
+    assert.equal(createdProject.name, "移动发布项目");
+
+    const initialAppsResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/apps`,
+      {
+        cookie: sessionCookie,
+      }
+    );
+    assert.equal(initialAppsResponse.status, 200);
+    assert.equal(initialAppsResponse.body.apps.length, 0);
+
+    const createdAppResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/apps`,
+      {
+        method: "POST",
+        cookie: sessionCookie,
+        body: {
+          name: "Task Atlas iOS",
+          description: "移动端主应用",
+          color: "#245a73",
+          platform: "ios",
+          bundleId: "com.taskatlas.ios",
+        },
+      }
+    );
     const createdApp = createdAppResponse.body.app;
 
     assert.equal(createdAppResponse.status, 201);
     assert.equal(createdApp.name, "Task Atlas iOS");
     assert.equal(createdApp.platform, "ios");
     assert.equal(createdApp.bundleId, "com.taskatlas.ios");
+    assert.equal(createdApp.projectId, createdProject.id);
 
     const updatedAppResponse = await request(baseUrl, `/api/apps/${createdApp.id}`, {
       method: "PATCH",
@@ -81,7 +112,7 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
 
     const createdVersionResponse = await request(
       baseUrl,
-      `/api/apps/${createdApp.id}/versions`,
+      `/api/projects/${createdProject.id}/apps/${createdApp.id}/versions`,
       {
         method: "POST",
         cookie: sessionCookie,
@@ -130,7 +161,7 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
 
     const secondVersionResponse = await request(
       baseUrl,
-      `/api/apps/${createdApp.id}/versions`,
+      `/api/projects/${createdProject.id}/apps/${createdApp.id}/versions`,
       {
         method: "POST",
         cookie: sessionCookie,
@@ -154,7 +185,7 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
 
     const bulkUpdateResponse = await request(
       baseUrl,
-      `/api/apps/${createdApp.id}/versions`,
+      `/api/projects/${createdProject.id}/apps/${createdApp.id}/versions`,
       {
         method: "PATCH",
         cookie: sessionCookie,
@@ -171,33 +202,48 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(bulkUpdateResponse.body.versions[1].status, "review");
     assert.equal(bulkUpdateResponse.body.versions[1].publishedDate, "");
 
-    const overviewResponse = await request(baseUrl, "/api/apps/overview", {
-      cookie: sessionCookie,
-    });
+    const overviewResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/apps/overview`,
+      {
+        cookie: sessionCookie,
+      }
+    );
 
     assert.equal(overviewResponse.status, 200);
     assert.equal(overviewResponse.body.totals.appCount, 1);
     assert.equal(overviewResponse.body.totals.versionCount, 2);
     assert.equal(overviewResponse.body.totals.reviewCount, 2);
+    assert.equal(overviewResponse.body.project.id, createdProject.id);
     assert.equal(overviewResponse.body.apps[0].recentVersions.length, 2);
 
-    const boardResponse = await request(baseUrl, `/api/apps/${createdApp.id}/board`, {
-      cookie: sessionCookie,
-    });
+    const boardResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/apps/${createdApp.id}/board`,
+      {
+        cookie: sessionCookie,
+      }
+    );
 
     assert.equal(boardResponse.status, 200);
+    assert.equal(boardResponse.body.project.id, createdProject.id);
     assert.equal(boardResponse.body.app.id, createdApp.id);
     assert.equal(boardResponse.body.versions.length, 2);
     assert.equal(boardResponse.body.versions[0].channel, "gray");
     assert.equal(boardResponse.body.versions[0].owner, "Zenith");
 
-    const exportResponse = await request(baseUrl, `/api/apps/${createdApp.id}/export`, {
-      cookie: sessionCookie,
-    });
+    const exportResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/apps/${createdApp.id}/export`,
+      {
+        cookie: sessionCookie,
+      }
+    );
     const exportPayload = exportResponse.body;
 
     assert.equal(exportResponse.status, 200);
     assert.equal(exportPayload.scope, "app");
+    assert.equal(exportPayload.project.name, "移动发布项目");
     assert.equal(exportPayload.app.name, "Task Atlas iOS");
     assert.equal(exportPayload.versions.length, 2);
     assert.equal(exportPayload.versions[0].buildNumber, "24015");
@@ -210,35 +256,61 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
 
     assert.equal(importedAppResponse.status, 201);
     assert.equal(importedAppResponse.body.importedCount, 1);
+    assert.equal(importedAppResponse.body.importedProjects.length, 1);
+    assert.equal(importedAppResponse.body.importedApps.length, 1);
+    assert.equal(importedAppResponse.body.importedProjects[0].name, "移动发布项目");
+
+    const importedStandaloneApp = importedAppResponse.body.importedApps[0];
+    const importedStandaloneBoardResponse = await request(
+      baseUrl,
+      `/api/projects/${importedStandaloneApp.projectId}/apps/${importedStandaloneApp.id}/board`,
+      {
+        cookie: sessionCookie,
+      }
+    );
+
+    assert.equal(importedStandaloneBoardResponse.status, 200);
+    assert.equal(importedStandaloneBoardResponse.body.versions.length, 2);
+    assert.equal(importedStandaloneBoardResponse.body.versions[0].buildNumber, "24015");
 
     const workspaceImportResponse = await request(baseUrl, "/api/apps/import/json", {
       method: "POST",
       cookie: sessionCookie,
       body: {
         source: "task-atlas",
-        version: 3,
+        version: 4,
         scope: "workspace",
-        apps: [
+        projects: [
           {
-            app: {
-              name: "Task Atlas Web",
-              description: "来自工作区 JSON 的 Web 端",
+            project: {
+              name: "Web 发布项目",
+              description: "来自工作区 JSON 的 Web 版本项目",
               color: "#c16b39",
-              platform: "web",
-              bundleId: "web.taskatlas.app",
               archived: false,
             },
-            versions: [
+            apps: [
               {
-                versionName: "1.9.0",
-                buildNumber: "19003",
-                description: "导入的版本记录",
-                notes: "补齐发布日志入口。",
-                owner: "Ava",
-                channel: "internal",
-                status: "doing",
-                priority: "medium",
-                releaseDate: "2026-05-03",
+                app: {
+                  name: "Task Atlas Web",
+                  description: "来自工作区 JSON 的 Web 端",
+                  color: "#c16b39",
+                  platform: "web",
+                  bundleId: "web.taskatlas.app",
+                  archived: false,
+                },
+                versions: [
+                  {
+                    versionName: "1.9.0",
+                    buildNumber: "19003",
+                    description: "导入的版本记录",
+                    notes: "补齐发布日志入口。",
+                    owner: "Ava",
+                    channel: "internal",
+                    status: "doing",
+                    priority: "medium",
+                    releaseDate: "2026-05-03",
+                  },
+                ],
               },
             ],
           },
@@ -248,17 +320,20 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
 
     assert.equal(workspaceImportResponse.status, 201);
     assert.equal(workspaceImportResponse.body.importedCount, 1);
+    assert.equal(workspaceImportResponse.body.importedProjects.length, 1);
 
-    const importedWorkspaceAppId = workspaceImportResponse.body.importedApps[0].id;
+    const importedWorkspaceApp = workspaceImportResponse.body.importedApps[0];
+    const importedWorkspaceAppId = importedWorkspaceApp.id;
     const importedBoardResponse = await request(
       baseUrl,
-      `/api/apps/${importedWorkspaceAppId}/board`,
+      `/api/projects/${importedWorkspaceApp.projectId}/apps/${importedWorkspaceAppId}/board`,
       {
         cookie: sessionCookie,
       }
     );
 
     assert.equal(importedBoardResponse.status, 200);
+    assert.equal(importedBoardResponse.body.project.name, "Web 发布项目");
     assert.equal(importedBoardResponse.body.app.platform, "web");
     assert.equal(importedBoardResponse.body.versions.length, 1);
     assert.equal(importedBoardResponse.body.versions[0].notes, "补齐发布日志入口。");
@@ -279,15 +354,28 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     });
     assert.equal(deleteAppResponse.status, 204);
 
-    const finalAppsResponse = await request(baseUrl, "/api/apps", {
+    const finalAppsResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/apps`,
+      {
+        cookie: sessionCookie,
+      }
+    );
+
+    assert.equal(finalAppsResponse.status, 200);
+    assert.ok(!finalAppsResponse.body.apps.some((item) => item.id === createdApp.id));
+
+    const finalProjectsResponse = await request(baseUrl, "/api/projects", {
       cookie: sessionCookie,
     });
 
-    assert.equal(finalAppsResponse.status, 200);
+    assert.equal(finalProjectsResponse.status, 200);
+    assert.ok(finalProjectsResponse.body.projects.some((item) => item.id === defaultProject.id));
     assert.ok(
-      finalAppsResponse.body.apps.some((item) => item.id === importedWorkspaceAppId)
+      finalProjectsResponse.body.projects.some(
+        (item) => item.id === importedWorkspaceApp.projectId
+      )
     );
-    assert.ok(!finalAppsResponse.body.apps.some((item) => item.id === createdApp.id));
   } finally {
     await new Promise((resolve, reject) => {
       server.close((error) => {
