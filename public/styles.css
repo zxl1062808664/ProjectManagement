@@ -1064,6 +1064,190 @@ body[data-theme="night"] .panel::before {
   margin-top: 8px;
 }
 
+.task-calendar-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.75fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.schedule-calendar-shell {
+  margin-top: 0;
+}
+
+.task-calendar-board,
+.task-calendar-detail {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.task-calendar-header,
+.task-calendar-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.task-calendar-header h3,
+.task-calendar-detail-head h3 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", "Songti SC", serif;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.task-calendar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.task-calendar-weekdays,
+.task-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.task-calendar-weekdays {
+  gap: 5px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  text-align: center;
+}
+
+.task-calendar-grid {
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.task-calendar-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-height: 86px;
+  padding: 8px 9px 10px;
+  border: 1px solid rgba(79, 93, 110, 0.12);
+  border-radius: 10px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.62);
+  overflow: hidden;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.task-calendar-day:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: rgba(193, 107, 57, 0.38);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.task-calendar-day.is-muted {
+  opacity: 0.46;
+}
+
+.task-calendar-day.is-selected {
+  border-color: var(--accent);
+  background: rgba(193, 107, 57, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(193, 107, 57, 0.18);
+}
+
+.task-calendar-day.is-today .task-calendar-date-number {
+  color: var(--accent-deep);
+  font-weight: 800;
+}
+
+.task-calendar-date-number {
+  font-size: 0.86rem;
+  line-height: 1;
+}
+
+.task-calendar-dot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(193, 107, 57, 0.12);
+}
+
+.task-calendar-preview {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  margin-top: 7px;
+}
+
+.task-calendar-preview-item,
+.task-calendar-preview-more {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-calendar-preview-marker {
+  color: var(--accent-deep);
+}
+
+.task-calendar-preview-more {
+  color: var(--accent-deep);
+}
+
+.task-calendar-detail-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  max-height: 600px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.task-calendar-detail-item {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid rgba(79, 93, 110, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.task-calendar-detail-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-calendar-detail-title strong {
+  line-height: 1.32;
+}
+
+.task-calendar-detail-item p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .detail-task-list-panel .task-record-list {
   gap: 6px;
 }
@@ -1138,6 +1322,122 @@ body[data-theme="night"] .panel::before {
 
 .detail-task-list-panel .task-record-meta {
   font-size: 0.74rem;
+}
+
+.kiosk-detail-panel {
+  padding: 18px;
+}
+
+.kiosk-detail-panel .section-heading {
+  gap: 10px;
+}
+
+.kiosk-detail-panel .auth-copy,
+.kiosk-list-panel .auth-copy {
+  margin-top: 2px;
+  line-height: 1.42;
+  font-size: 0.84rem;
+}
+
+.kiosk-editor-form {
+  gap: 12px;
+}
+
+.kiosk-editor-form .field-grid {
+  gap: 12px;
+}
+
+.kiosk-editor-form .field {
+  gap: 6px;
+}
+
+.kiosk-editor-form .field span,
+.kiosk-list-toolbar .field span {
+  font-size: 0.84rem;
+}
+
+.kiosk-editor-form .field input,
+.kiosk-editor-form .field textarea,
+.kiosk-editor-form .field select,
+.kiosk-list-toolbar .field select {
+  padding: 11px 12px;
+}
+
+.kiosk-editor-form .field textarea {
+  min-height: 84px;
+}
+
+.kiosk-editor-form .form-actions {
+  gap: 10px;
+}
+
+.kiosk-list-panel {
+  padding: 14px;
+}
+
+.kiosk-list-panel .section-heading {
+  gap: 8px;
+}
+
+.kiosk-list-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.kiosk-list-toolbar .field {
+  gap: 5px;
+}
+
+.kiosk-list-toolbar .compact-field {
+  min-width: 220px;
+  margin: 0;
+}
+
+.kiosk-list-toolbar .meta-row {
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.kiosk-list-panel .stacked-list {
+  gap: 8px;
+}
+
+.kiosk-list-panel .manager-item {
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+.kiosk-list-panel .manager-item > div:first-child {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.kiosk-list-panel .manager-main {
+  gap: 8px;
+}
+
+.kiosk-list-panel .manager-swatch {
+  width: 10px;
+  height: 10px;
+}
+
+.kiosk-list-panel .meta-row {
+  gap: 4px;
+}
+
+.kiosk-list-panel .manager-item > .meta-row {
+  justify-content: flex-end;
+}
+
+.kiosk-list-panel .project-overview-copy {
+  line-height: 1.38;
+  font-size: 0.82rem;
 }
 
 .recent-task-item {
@@ -1949,6 +2249,10 @@ body[data-theme="night"] .tool-action-card,
 body[data-theme="night"] .tool-metric-card,
 body[data-theme="night"] .project-overview-card,
 body[data-theme="night"] .task-record-card,
+body[data-theme="night"] .task-calendar-board,
+body[data-theme="night"] .task-calendar-detail,
+body[data-theme="night"] .task-calendar-day,
+body[data-theme="night"] .task-calendar-detail-item,
 body[data-theme="night"] .focus-item,
 body[data-theme="night"] .tool-task-item,
 body[data-theme="night"] .timeline-group,
@@ -2007,6 +2311,15 @@ body[data-theme="night"] .task-status-select {
 body[data-theme="night"] .field input::placeholder,
 body[data-theme="night"] .field textarea::placeholder {
   color: rgba(158, 172, 184, 0.72);
+}
+
+body[data-theme="night"] .task-calendar-day:not(:disabled):hover {
+  background: rgba(30, 44, 61, 0.9);
+}
+
+body[data-theme="night"] .task-calendar-day.is-selected {
+  background: rgba(222, 139, 79, 0.16);
+  border-color: rgba(222, 139, 79, 0.62);
 }
 
 body[data-theme="night"] .detail-panel-backdrop {
@@ -2206,6 +2519,7 @@ body[data-theme="night"] .toast {
   .overview-grid,
   .detail-grid,
   .detail-filter-grid,
+  .task-calendar-shell,
   .focus-grid,
   .filter-grid,
   .filter-grid.wide {
@@ -2273,6 +2587,8 @@ body[data-theme="night"] .toast {
   .topbar,
   .task-header,
   .task-footer,
+  .task-calendar-header,
+  .task-calendar-detail-head,
   .upcoming-item,
   .focus-item,
   .tool-action-card,
@@ -2291,6 +2607,7 @@ body[data-theme="night"] .toast {
   }
 
   .topbar-actions,
+  .task-calendar-actions,
   .form-actions {
     width: 100%;
   }
@@ -2318,9 +2635,19 @@ body[data-theme="night"] .toast {
     width: 8px;
   }
 
+  .task-calendar-day {
+    min-height: 68px;
+    padding: 6px 7px 8px;
+  }
+
+  .task-calendar-actions {
+    justify-content: stretch;
+  }
+
   .workspace-mode-pill,
   .theme-mode-switch,
   .form-actions button,
+  .task-calendar-actions button,
   .compact-field,
   .task-status-select,
   .tool-action-card button,
@@ -2343,6 +2670,15 @@ body[data-theme="night"] .toast {
   .timeline-task-actions,
   .task-record-actions {
     align-items: stretch;
+  }
+
+  .kiosk-list-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .kiosk-list-toolbar .meta-row {
+    justify-content: flex-start;
   }
 
   .toast {

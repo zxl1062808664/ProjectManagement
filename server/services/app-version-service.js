@@ -148,6 +148,7 @@ const selectVersionsByAppStatement = db.prepare(`
     app_id,
     version_name,
     build_number,
+    resource_version,
     description,
     notes,
     owner,
@@ -165,6 +166,32 @@ const selectVersionsByAppStatement = db.prepare(`
   ORDER BY position ASC, created_at DESC
 `);
 
+const selectVersionsByProjectStatement = db.prepare(`
+  SELECT
+    app_versions.id,
+    app_versions.app_id,
+    apps.project_id,
+    app_versions.version_name,
+    app_versions.build_number,
+    app_versions.resource_version,
+    app_versions.description,
+    app_versions.notes,
+    app_versions.owner,
+    app_versions.channel,
+    app_versions.status,
+    app_versions.priority,
+    app_versions.planned_date,
+    app_versions.release_date,
+    app_versions.published_date,
+    app_versions.position,
+    app_versions.created_at,
+    app_versions.updated_at
+  FROM app_versions
+  JOIN apps ON apps.id = app_versions.app_id
+  WHERE apps.user_id = ? AND apps.project_id = ?
+  ORDER BY apps.archived ASC, apps.updated_at DESC, app_versions.position ASC, app_versions.created_at DESC
+`);
+
 const selectVersionByIdForUserStatement = db.prepare(`
   SELECT
     app_versions.id,
@@ -172,6 +199,7 @@ const selectVersionByIdForUserStatement = db.prepare(`
     apps.project_id,
     app_versions.version_name,
     app_versions.build_number,
+    app_versions.resource_version,
     app_versions.description,
     app_versions.notes,
     app_versions.owner,
@@ -195,6 +223,7 @@ const insertVersionStatement = db.prepare(`
     app_id,
     version_name,
     build_number,
+    resource_version,
     description,
     notes,
     owner,
@@ -208,7 +237,7 @@ const insertVersionStatement = db.prepare(`
     created_at,
     updated_at
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 const updateVersionStatement = db.prepare(`
@@ -216,6 +245,7 @@ const updateVersionStatement = db.prepare(`
   SET
     version_name = ?,
     build_number = ?,
+    resource_version = ?,
     description = ?,
     notes = ?,
     owner = ?,
@@ -240,6 +270,18 @@ const deleteVersionStatement = db.prepare(`
   WHERE id = ?
 `);
 
+const clearKioskActiveAppStatement = db.prepare(`
+  UPDATE kiosks
+  SET active_app_id = '', active_version_id = '', updated_at = ?
+  WHERE active_app_id = ?
+`);
+
+const clearKioskActiveVersionStatement = db.prepare(`
+  UPDATE kiosks
+  SET active_version_id = '', updated_at = ?
+  WHERE active_version_id = ?
+`);
+
 const selectMaxPositionByAppStatement = db.prepare(`
   SELECT COALESCE(MAX(position), 0) AS max_position
   FROM app_versions
@@ -259,6 +301,11 @@ function listAppsForUser(userId, options = {}) {
 
 function listAppsByProject(userId, projectId) {
   return listAppsForUser(userId, { projectId });
+}
+
+function listVersionsByProject(userId, projectId) {
+  const project = getProjectOrThrow(userId, projectId);
+  return selectVersionsByProjectStatement.all(userId, project.id).map(mapVersionRow);
 }
 
 function getAppOverview(userId, projectId) {
@@ -286,6 +333,7 @@ function getAppOverview(userId, projectId) {
           id: version.id,
           versionName: version.versionName,
           buildNumber: version.buildNumber,
+          resourceVersion: version.resourceVersion,
           channel: version.channel,
           status: version.status,
           priority: version.priority,
@@ -421,6 +469,7 @@ function updateApp(userId, appId, payload = {}) {
   );
 
   if (currentApp.projectId !== updatedApp.projectId) {
+    clearKioskActiveAppStatement.run(updatedApp.updatedAt, appId);
     touchProject(currentApp.projectId, updatedApp.updatedAt);
   }
   touchProject(updatedApp.projectId, updatedApp.updatedAt);
@@ -430,8 +479,10 @@ function updateApp(userId, appId, payload = {}) {
 
 function deleteApp(userId, appId) {
   const currentApp = getAppOrThrow(userId, appId);
+  const updatedAt = new Date().toISOString();
+  clearKioskActiveAppStatement.run(updatedAt, appId);
   deleteAppStatement.run(appId, userId);
-  touchProject(currentApp.projectId);
+  touchProject(currentApp.projectId, updatedAt);
 }
 
 function deleteAppsByProject(userId, projectId) {
@@ -456,6 +507,10 @@ function updateVersion(userId, versionId, payload = {}) {
         payload.versionName === undefined ? currentVersion.versionName : payload.versionName,
       buildNumber:
         payload.buildNumber === undefined ? currentVersion.buildNumber : payload.buildNumber,
+      resourceVersion:
+        payload.resourceVersion === undefined
+          ? currentVersion.resourceVersion
+          : payload.resourceVersion,
       description:
         payload.description === undefined ? currentVersion.description : payload.description,
       notes: payload.notes === undefined ? currentVersion.notes : payload.notes,
@@ -481,6 +536,7 @@ function updateVersion(userId, versionId, payload = {}) {
   updateVersionStatement.run(
     normalizedVersion.versionName,
     normalizedVersion.buildNumber,
+    normalizedVersion.resourceVersion,
     normalizedVersion.description,
     normalizedVersion.notes,
     normalizedVersion.owner,
@@ -534,8 +590,10 @@ function bulkUpdateVersions(userId, projectId, appId, payload = {}) {
 
 function deleteVersion(userId, versionId) {
   const currentVersion = getVersionOrThrow(userId, versionId);
+  const updatedAt = new Date().toISOString();
+  clearKioskActiveVersionStatement.run(updatedAt, versionId);
   deleteVersionStatement.run(versionId);
-  touchProject(currentVersion.projectId);
+  touchProject(currentVersion.projectId, updatedAt);
 }
 
 function exportApp(userId, projectId, appId) {
@@ -676,6 +734,7 @@ function importAppPayload(userId, projectId, payload) {
       normalizeVersionInput(createdApp.id, {
         versionName: item.versionName,
         buildNumber: item.buildNumber,
+        resourceVersion: item.resourceVersion,
         description: item.description,
         notes: item.notes,
         owner: item.owner,
@@ -709,6 +768,7 @@ function buildAppExportEntry(app) {
     versions: listVersionsByApp(app.id).map((item) => ({
       versionName: item.versionName,
       buildNumber: item.buildNumber,
+      resourceVersion: item.resourceVersion,
       description: item.description,
       notes: item.notes,
       owner: item.owner,
@@ -843,6 +903,7 @@ function persistVersionRecord(userId, appId, normalizedVersion) {
     appId,
     normalizedVersion.versionName,
     normalizedVersion.buildNumber,
+    normalizedVersion.resourceVersion,
     normalizedVersion.description,
     normalizedVersion.notes,
     normalizedVersion.owner,
@@ -868,13 +929,12 @@ function normalizeVersionInput(appId, payload = {}, options = {}) {
   getAppOrThrowFromAppId(appId);
 
   const status = normalizeEnum(payload.status, VALID_STATUSES, "todo", "INVALID_STATUS");
+  const identity = normalizeVersionIdentity(payload);
 
   return {
-    versionName: normalizeText(payload.versionName, 60, {
-      required: true,
-      errorCode: "INVALID_VERSION_NAME",
-    }),
-    buildNumber: normalizeText(payload.buildNumber, 60),
+    versionName: identity.versionName,
+    buildNumber: identity.buildNumber,
+    resourceVersion: identity.resourceVersion,
     description: normalizeText(payload.description, 1200),
     notes: normalizeText(payload.notes, 2000),
     owner: normalizeText(payload.owner, 80),
@@ -898,6 +958,26 @@ function normalizeVersionInput(appId, payload = {}, options = {}) {
       publishedDate: payload.publishedDate,
       previousVersion,
     }),
+  };
+}
+
+function normalizeVersionIdentity(payload = {}) {
+  const versionName = normalizeText(payload.versionName, 60);
+  const buildNumber = normalizeText(payload.buildNumber, 60);
+  const resourceVersion = normalizeText(payload.resourceVersion, 80);
+
+  if (!versionName && !buildNumber && !resourceVersion) {
+    throw createHttpError(
+      422,
+      "INVALID_VERSION_IDENTIFIER",
+      "版本号、构建号、资源版本至少填写一项"
+    );
+  }
+
+  return {
+    versionName,
+    buildNumber,
+    resourceVersion,
   };
 }
 
@@ -1087,6 +1167,7 @@ function mapVersionRow(row) {
     projectId: row.project_id || "",
     versionName: row.version_name,
     buildNumber: row.build_number,
+    resourceVersion: row.resource_version,
     description: row.description,
     notes: row.notes,
     owner: row.owner,
@@ -1141,6 +1222,7 @@ module.exports = {
   importAppsIntoProject,
   listAppsByProject,
   listAppsForUser,
+  listVersionsByProject,
   updateApp,
   updateVersion,
 };

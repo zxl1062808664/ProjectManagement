@@ -4,9 +4,11 @@ const { requireAuth } = require("../middleware/auth");
 const {
   bulkUpdateTasks,
   clearCompletedTasks,
+  createKiosk,
   createProject,
   createTag,
   createTask,
+  deleteKiosk,
   deleteProject,
   deleteTag,
   deleteTask,
@@ -15,6 +17,7 @@ const {
   getWorkspaceOverview,
   importData,
   listProjectsForUser,
+  updateKiosk,
   updateProject,
   updateSubtask,
   updateTag,
@@ -74,6 +77,11 @@ router.post("/projects/:projectId/tags", (req, res) => {
   res.status(201).json({ tag });
 });
 
+router.post("/projects/:projectId/kiosks", (req, res) => {
+  const kiosk = createKiosk(req.auth.user.id, req.params.projectId, req.body || {});
+  res.status(201).json({ kiosk });
+});
+
 router.get("/projects/:projectId/export", (req, res) => {
   res.json(exportProject(req.auth.user.id, req.params.projectId));
 });
@@ -100,6 +108,16 @@ router.patch("/tags/:tagId", (req, res) => {
 
 router.delete("/tags/:tagId", (req, res) => {
   deleteTag(req.auth.user.id, req.params.tagId);
+  res.status(204).end();
+});
+
+router.patch("/kiosks/:kioskId", (req, res) => {
+  const kiosk = updateKiosk(req.auth.user.id, req.params.kioskId, req.body || {});
+  res.json({ kiosk });
+});
+
+router.delete("/kiosks/:kioskId", (req, res) => {
+  deleteKiosk(req.auth.user.id, req.params.kioskId);
   res.status(204).end();
 });
 

@@ -41,6 +41,21 @@ const VERSION_CHANNEL_META = {
   hotfix: { label: "Hotfix" },
 };
 
+const KIOSK_PRINTER_CONNECTION_META = {
+  usb: { label: "USB" },
+  bluetooth: { label: "蓝牙" },
+  wifi: { label: "WiFi" },
+};
+
+const KIOSK_PLATFORM_OPTIONS = ["Windows", "Android", "iOS"];
+const KIOSK_REMOTE_PLATFORM_OPTIONS = [
+  "Anydesk",
+  "Todesk",
+  "Rustdesk",
+  "向日葵",
+  "TeamViewer",
+];
+
 const DEFAULT_PROJECT_NAME = "本地收件箱";
 const DEFAULT_PROJECT_DESCRIPTION = "未登录时保存在浏览器中的默认项目。";
 const LEGACY_APP_MIGRATION_PROJECT_NAME = "版本迁移项目";
@@ -70,6 +85,16 @@ const TOOL_META = {
   details: {
     label: "任务管理",
     description: "按已有项目查看任务列表，并为当前项目维护任务。",
+    group: "project-management",
+  },
+  schedule: {
+    label: "日程表",
+    description: "按日历查看当前项目的任务和版本安排及当天详情。",
+    group: "project-management",
+  },
+  "kiosk-details": {
+    label: "Kiosk 统计",
+    description: "按已有项目查看 Kiosk 列表，并维护设备、打印机和远控信息。",
     group: "project-management",
   },
   "app-overview": {
@@ -122,14 +147,19 @@ const state = {
     projectFormMode: "edit",
     editingProjectId: null,
     editingTagId: null,
+    editingKioskId: null,
     editingTaskId: null,
     activeDetailPanel: null,
+    activeKioskDetailPanel: null,
+    kioskRegionFilter: "all",
     expandedOverviewProjectIds: [],
     expandedTaskRecordIds: [],
     selectedTaskIds: [],
     detailSearch: "",
     detailStatusFilter: "all",
     detailTagFilter: "all",
+    taskCalendarMonth: getCalendarMonthKey(todayString()),
+    taskCalendarSelectedDate: todayString(),
     appFormMode: "edit",
     editingAppId: null,
     editingVersionId: null,
@@ -177,6 +207,36 @@ const elements = {
   appVersionOverviewList: document.querySelector("#appVersionOverviewList"),
   projectManagerList: document.querySelector("#projectManagerList"),
   detailProjectCountBadge: document.querySelector("#detailProjectCountBadge"),
+  kioskProjectSelect: document.querySelector("#kioskProjectSelect"),
+  kioskProjectPanelButton: document.querySelector("#kioskProjectPanelButton"),
+  projectKioskCountBadge: document.querySelector("#projectKioskCountBadge"),
+  projectKioskNewButton: document.querySelector("#projectKioskNewButton"),
+  kioskDetailPanelBackdrop: document.querySelector("#kioskDetailPanelBackdrop"),
+  kioskDetailPanel: document.querySelector("#kioskDetailPanel"),
+  kioskDetailPanelCloseButtons: document.querySelectorAll("[data-kiosk-detail-panel-close]"),
+  kioskEditorModeBadge: document.querySelector("#kioskEditorModeBadge"),
+  kioskProjectHint: document.querySelector("#kioskProjectHint"),
+  projectKioskMeta: document.querySelector("#projectKioskMeta"),
+  kioskRegionFilterInput: document.querySelector("#kioskRegionFilterInput"),
+  projectKioskStats: document.querySelector("#projectKioskStats"),
+  kioskForm: document.querySelector("#kioskForm"),
+  kioskIdInput: document.querySelector("#kioskIdInput"),
+  kioskRegionInput: document.querySelector("#kioskRegionInput"),
+  kioskLocationInput: document.querySelector("#kioskLocationInput"),
+  kioskPrinterConnectionInput: document.querySelector("#kioskPrinterConnectionInput"),
+  kioskPrinterModelInput: document.querySelector("#kioskPrinterModelInput"),
+  kioskPrinterNotesInput: document.querySelector("#kioskPrinterNotesInput"),
+  kioskPlatformSelect: document.querySelector("#kioskPlatformSelect"),
+  kioskPlatformInput: document.querySelector("#kioskPlatformInput"),
+  kioskRemotePlatformSelect: document.querySelector("#kioskRemotePlatformSelect"),
+  kioskRemotePlatformInput: document.querySelector("#kioskRemotePlatformInput"),
+  kioskRemoteCodeInput: document.querySelector("#kioskRemoteCodeInput"),
+  kioskActiveAppSelect: document.querySelector("#kioskActiveAppSelect"),
+  kioskActiveVersionSelect: document.querySelector("#kioskActiveVersionSelect"),
+  kioskNotesInput: document.querySelector("#kioskNotesInput"),
+  kioskSubmitButton: document.querySelector("#kioskSubmitButton"),
+  kioskResetButton: document.querySelector("#kioskResetButton"),
+  projectKioskList: document.querySelector("#projectKioskList"),
   detailProjectPanelButton: document.querySelector("#detailProjectPanelButton"),
   detailTaskPanelButton: document.querySelector("#detailTaskPanelButton"),
   detailPanelBackdrop: document.querySelector("#detailPanelBackdrop"),
@@ -223,6 +283,16 @@ const elements = {
   taskSearchInput: document.querySelector("#taskSearchInput"),
   taskStatusFilterInput: document.querySelector("#taskStatusFilterInput"),
   taskTagFilterInput: document.querySelector("#taskTagFilterInput"),
+  scheduleProjectSelect: document.querySelector("#scheduleProjectSelect"),
+  scheduleProjectPanelButton: document.querySelector("#scheduleProjectPanelButton"),
+  taskCalendarMonthLabel: document.querySelector("#taskCalendarMonthLabel"),
+  taskCalendarPrevButton: document.querySelector("#taskCalendarPrevButton"),
+  taskCalendarTodayButton: document.querySelector("#taskCalendarTodayButton"),
+  taskCalendarNextButton: document.querySelector("#taskCalendarNextButton"),
+  taskCalendarGrid: document.querySelector("#taskCalendarGrid"),
+  taskCalendarDetailTitle: document.querySelector("#taskCalendarDetailTitle"),
+  taskCalendarDetailBadge: document.querySelector("#taskCalendarDetailBadge"),
+  taskCalendarDetailList: document.querySelector("#taskCalendarDetailList"),
   selectVisibleTasksButton: document.querySelector("#selectVisibleTasksButton"),
   selectedTaskCountBadge: document.querySelector("#selectedTaskCountBadge"),
   bulkStatusInput: document.querySelector("#bulkStatusInput"),
@@ -268,6 +338,7 @@ const elements = {
   versionIdInput: document.querySelector("#versionIdInput"),
   versionNameInput: document.querySelector("#versionNameInput"),
   buildNumberInput: document.querySelector("#buildNumberInput"),
+  resourceVersionInput: document.querySelector("#resourceVersionInput"),
   versionDescriptionInput: document.querySelector("#versionDescriptionInput"),
   versionNotesInput: document.querySelector("#versionNotesInput"),
   versionOwnerInput: document.querySelector("#versionOwnerInput"),
@@ -282,6 +353,7 @@ const elements = {
   versionListSummary: document.querySelector("#versionListSummary"),
   appDetailCurrentMeta: document.querySelector("#appDetailCurrentMeta"),
   versionSearchInput: document.querySelector("#versionSearchInput"),
+  versionBundleIdDisplayInput: document.querySelector("#versionBundleIdDisplayInput"),
   versionStatusFilterInput: document.querySelector("#versionStatusFilterInput"),
   versionChannelFilterInput: document.querySelector("#versionChannelFilterInput"),
   selectVisibleVersionsButton: document.querySelector("#selectVisibleVersionsButton"),
@@ -354,17 +426,26 @@ function bindEvents() {
   elements.projectSelect.addEventListener("change", handleProjectSelectionChange);
   elements.projectManagerList.addEventListener("click", handleProjectManagerListClick);
   elements.detailProjectSelect.addEventListener("change", handleDetailProjectSelectionChange);
+  elements.scheduleProjectSelect.addEventListener("change", handleScheduleProjectSelectionChange);
+  elements.kioskProjectSelect.addEventListener("change", handleKioskProjectSelectionChange);
   elements.appDetailAppSelect.addEventListener("change", handleAppDetailSelectionChange);
   elements.detailProjectPanelButton.addEventListener("click", handleOpenProjectPanel);
+  elements.scheduleProjectPanelButton.addEventListener("click", handleOpenProjectPanel);
+  elements.kioskProjectPanelButton.addEventListener("click", handleOpenProjectPanel);
   elements.detailTaskPanelButton.addEventListener("click", handleOpenTaskPanel);
+  elements.projectKioskNewButton.addEventListener("click", handleOpenKioskPanel);
   elements.appDetailAppPanelButton.addEventListener("click", handleOpenAppPanel);
   elements.appDetailVersionPanelButton.addEventListener("click", handleOpenVersionPanel);
   elements.detailPanelBackdrop.addEventListener("click", closeDetailPanel);
+  elements.kioskDetailPanelBackdrop.addEventListener("click", closeKioskDetailPanel);
   elements.appDetailPanelBackdrop.addEventListener("click", closeAppDetailPanel);
   elements.projectEditDialogBackdrop.addEventListener("click", closeProjectEditDialog);
   elements.projectCreateDialogBackdrop.addEventListener("click", closeProjectCreateDialog);
   elements.detailPanelCloseButtons.forEach((button) => {
     button.addEventListener("click", closeDetailPanel);
+  });
+  elements.kioskDetailPanelCloseButtons.forEach((button) => {
+    button.addEventListener("click", closeKioskDetailPanel);
   });
   elements.appDetailPanelCloseButtons.forEach((button) => {
     button.addEventListener("click", closeAppDetailPanel);
@@ -380,6 +461,16 @@ function bindEvents() {
   elements.tagForm.addEventListener("submit", handleTagFormSubmit);
   elements.tagResetButton.addEventListener("click", handleTagReset);
   elements.detailTagList.addEventListener("click", handleTagListClick);
+  elements.kioskPlatformSelect.addEventListener("change", handleKioskPlatformSelectChange);
+  elements.kioskRemotePlatformSelect.addEventListener(
+    "change",
+    handleKioskRemotePlatformSelectChange
+  );
+  elements.kioskActiveAppSelect.addEventListener("change", handleKioskActiveAppSelectChange);
+  elements.kioskRegionFilterInput.addEventListener("change", handleKioskRegionFilterChange);
+  elements.kioskForm.addEventListener("submit", handleKioskFormSubmit);
+  elements.kioskResetButton.addEventListener("click", handleKioskReset);
+  elements.projectKioskList.addEventListener("click", handleKioskListClick);
   elements.taskForm.addEventListener("submit", handleTaskFormSubmit);
   elements.taskResetButton.addEventListener("click", handleTaskReset);
   elements.taskTagPicker.addEventListener("click", handleTaskTagPickerClick);
@@ -387,6 +478,10 @@ function bindEvents() {
   elements.taskSearchInput.addEventListener("input", handleTaskSearchInput);
   elements.taskStatusFilterInput.addEventListener("change", handleTaskFilterChange);
   elements.taskTagFilterInput.addEventListener("change", handleTaskFilterChange);
+  elements.taskCalendarGrid.addEventListener("click", handleTaskCalendarDayClick);
+  elements.taskCalendarPrevButton.addEventListener("click", () => shiftTaskCalendarMonth(-1));
+  elements.taskCalendarTodayButton.addEventListener("click", handleTaskCalendarTodayClick);
+  elements.taskCalendarNextButton.addEventListener("click", () => shiftTaskCalendarMonth(1));
   elements.selectVisibleTasksButton.addEventListener("click", handleSelectVisibleTasks);
   elements.applyBulkStatusButton.addEventListener("click", handleApplyBulkStatus);
   elements.taskDetailList.addEventListener("click", handleTaskListClick);
@@ -470,6 +565,9 @@ function setActiveTool(tool) {
   state.ui.activeTool = nextTool;
   if (nextTool !== "details") {
     state.ui.activeDetailPanel = null;
+  }
+  if (nextTool !== "kiosk-details") {
+    state.ui.activeKioskDetailPanel = null;
   }
   if (nextTool !== "app-details") {
     state.ui.activeAppDetailPanel = null;
@@ -582,6 +680,30 @@ async function handleDetailProjectSelectionChange(event) {
   await setCurrentProject(selectedProjectId, { nextTool: "details" });
 }
 
+async function handleScheduleProjectSelectionChange(event) {
+  const selectedProjectId = event.target.value;
+  if (!selectedProjectId) {
+    return;
+  }
+
+  state.ui.projectFormMode = "edit";
+  state.ui.editingProjectId = selectedProjectId;
+  state.ui.editingTaskId = null;
+  await setCurrentProject(selectedProjectId, { nextTool: "schedule" });
+}
+
+async function handleKioskProjectSelectionChange(event) {
+  const selectedProjectId = event.target.value;
+  if (!selectedProjectId) {
+    return;
+  }
+
+  state.ui.projectFormMode = "edit";
+  state.ui.editingProjectId = selectedProjectId;
+  state.ui.editingKioskId = null;
+  await setCurrentProject(selectedProjectId, { nextTool: "kiosk-details" });
+}
+
 async function handleProjectManagerListClick(event) {
   const button = event.target.closest("[data-project-action]");
   if (!button) {
@@ -611,6 +733,21 @@ async function handleProjectManagerListClick(event) {
   }
 }
 
+function handleOpenKioskPanel() {
+  state.ui.editingKioskId = null;
+  state.ui.activeKioskDetailPanel = "editor";
+  render();
+
+  window.requestAnimationFrame(() => {
+    if (
+      typeof elements.kioskRegionInput.focus === "function" &&
+      !elements.kioskRegionInput.disabled
+    ) {
+      elements.kioskRegionInput.focus();
+    }
+  });
+}
+
 function resetProjectCreateDialogForm() {
   elements.projectCreateDialogForm.reset();
   elements.projectCreateDialogColorInput.value = "#c16b39";
@@ -622,6 +759,7 @@ async function openProjectEditDialog(projectId) {
   }
 
   state.ui.activeDetailPanel = null;
+  state.ui.activeKioskDetailPanel = null;
   state.ui.activeAppDetailPanel = null;
   state.ui.projectCreateDialogOpen = false;
   state.ui.projectFormMode = "edit";
@@ -650,6 +788,7 @@ function closeProjectEditDialog() {
 
 function openProjectCreateDialog() {
   state.ui.activeDetailPanel = null;
+  state.ui.activeKioskDetailPanel = null;
   state.ui.activeAppDetailPanel = null;
   state.ui.projectEditDialogOpen = false;
   state.ui.projectCreateDialogOpen = true;
@@ -677,6 +816,7 @@ function closeProjectCreateDialog() {
 
 function handleOpenProjectPanel() {
   state.ui.activeDetailPanel = null;
+  state.ui.activeKioskDetailPanel = null;
   setActiveTool("projects");
 
   window.requestAnimationFrame(() => {
@@ -712,6 +852,16 @@ function closeDetailPanel() {
   render();
 }
 
+function closeKioskDetailPanel() {
+  if (!state.ui.activeKioskDetailPanel) {
+    return;
+  }
+
+  state.ui.editingKioskId = null;
+  state.ui.activeKioskDetailPanel = null;
+  render();
+}
+
 function handleGlobalKeydown(event) {
   if (event.key !== "Escape") {
     return;
@@ -727,6 +877,10 @@ function handleGlobalKeydown(event) {
 
   if (state.ui.activeDetailPanel) {
     closeDetailPanel();
+  }
+
+  if (state.ui.activeKioskDetailPanel) {
+    closeKioskDetailPanel();
   }
 
   if (state.ui.activeAppDetailPanel) {
@@ -767,9 +921,13 @@ async function setCurrentProject(projectId, options = {}) {
 
   if (projectId && projectId !== previousProjectId) {
     state.ui.editingTagId = null;
+    state.ui.editingKioskId = null;
     state.ui.editingTaskId = null;
+    state.ui.kioskRegionFilter = "all";
     state.ui.expandedTaskRecordIds = [];
     state.ui.selectedTaskIds = [];
+    state.ui.taskCalendarMonth = getCalendarMonthKey(todayString());
+    state.ui.taskCalendarSelectedDate = todayString();
     state.ui.expandedVersionRecordIds = [];
     state.ui.selectedVersionIds = [];
     resetTaskDetailFilters();
@@ -968,6 +1126,7 @@ async function handleProjectCreateDialogSubmit(event) {
     state.ui.projectFormMode = "edit";
     state.ui.editingProjectId = projectId || null;
     state.ui.editingTagId = null;
+    state.ui.editingKioskId = null;
     state.ui.editingTaskId = null;
     state.ui.editingAppId = null;
     state.ui.editingVersionId = null;
@@ -1047,7 +1206,10 @@ async function handleProjectFormSubmit(event) {
         if (isPlaceholderGuestWorkspace(workspace)) {
           workspace.projects = [project];
           workspace.tags = [];
+          workspace.kiosks = [];
           workspace.tasks = [];
+          workspace.apps = [];
+          workspace.versions = [];
         } else {
           workspace.projects.unshift(project);
         }
@@ -1177,6 +1339,9 @@ async function handleProjectDelete(targetProjectId = null) {
           (project) => project.id !== currentProject.id
         );
         workspace.tags = workspace.tags.filter((tag) => tag.projectId !== currentProject.id);
+        workspace.kiosks = workspace.kiosks.filter(
+          (kiosk) => kiosk.projectId !== currentProject.id
+        );
         workspace.tasks = workspace.tasks.filter(
           (task) => task.projectId !== currentProject.id
         );
@@ -1199,6 +1364,204 @@ async function handleProjectDelete(targetProjectId = null) {
 
     render();
     showToast("项目已删除");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function handleKioskFormSubmit(event) {
+  event.preventDefault();
+
+  const currentProject = state.workspace.currentProject;
+  if (!currentProject) {
+    showToast("请先选择项目");
+    return;
+  }
+
+  const region = elements.kioskRegionInput.value.trim();
+  const location = elements.kioskLocationInput.value.trim();
+  if (!region || !location) {
+    showToast("请填写所属地区和具体位置");
+    return;
+  }
+
+  const payload = {
+    region,
+    location,
+    printerConnection: elements.kioskPrinterConnectionInput.value || "usb",
+    printerModel: elements.kioskPrinterModelInput.value.trim(),
+    printerNotes: elements.kioskPrinterNotesInput.value.trim(),
+    kioskPlatform: getSelectOrCustomInputValue(
+      elements.kioskPlatformSelect,
+      elements.kioskPlatformInput
+    ),
+    remotePlatform: getSelectOrCustomInputValue(
+      elements.kioskRemotePlatformSelect,
+      elements.kioskRemotePlatformInput
+    ),
+    remoteCode: elements.kioskRemoteCodeInput.value.trim(),
+    activeAppId: elements.kioskActiveAppSelect.value || "",
+    activeVersionId: elements.kioskActiveVersionSelect.value || "",
+    notes: elements.kioskNotesInput.value.trim(),
+  };
+  const editingKioskId = state.ui.editingKioskId;
+
+  try {
+    if (state.workspace.mode === "cloud") {
+      if (editingKioskId) {
+        await apiRequest(`/api/kiosks/${editingKioskId}`, {
+          method: "PATCH",
+          body: payload,
+        });
+      } else {
+        await apiRequest(`/api/projects/${currentProject.id}/kiosks`, {
+          method: "POST",
+          body: payload,
+        });
+      }
+
+      state.ui.editingKioskId = null;
+      state.ui.activeKioskDetailPanel = null;
+      await loadCloudWorkspace({ projectId: currentProject.id });
+      render();
+      showToast(editingKioskId ? "Kiosk 已保存" : "Kiosk 已创建");
+      return;
+    }
+
+    if (editingKioskId) {
+      updateGuestWorkspace((workspace) => {
+        const existingKiosk = workspace.kiosks.find((kiosk) => kiosk.id === editingKioskId);
+        if (!existingKiosk) {
+          return;
+        }
+
+        const timestamp = new Date().toISOString();
+        workspace.kiosks = workspace.kiosks.map((kiosk) =>
+          kiosk.id === editingKioskId
+            ? {
+                ...kiosk,
+                ...payload,
+                updatedAt: timestamp,
+              }
+            : kiosk
+        );
+        touchGuestProject(workspace, existingKiosk.projectId, timestamp);
+      });
+    } else {
+      const kiosk = createGuestKioskRecord(currentProject.id, payload);
+      updateGuestWorkspace((workspace) => {
+        workspace.kiosks.unshift(kiosk);
+        touchGuestProject(workspace, currentProject.id, kiosk.updatedAt);
+      });
+    }
+
+    state.ui.editingKioskId = null;
+    state.ui.activeKioskDetailPanel = null;
+    syncGuestView(currentProject.id);
+    render();
+    showToast(editingKioskId ? "Kiosk 已保存" : "Kiosk 已创建");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+function handleKioskPlatformSelectChange() {
+  toggleSelectCustomInput(elements.kioskPlatformSelect, elements.kioskPlatformInput);
+  if (
+    elements.kioskPlatformSelect.value === "other" &&
+    typeof elements.kioskPlatformInput.focus === "function" &&
+    !elements.kioskPlatformInput.disabled
+  ) {
+    elements.kioskPlatformInput.focus();
+  }
+}
+
+function handleKioskRemotePlatformSelectChange() {
+  toggleSelectCustomInput(elements.kioskRemotePlatformSelect, elements.kioskRemotePlatformInput);
+  if (
+    elements.kioskRemotePlatformSelect.value === "other" &&
+    typeof elements.kioskRemotePlatformInput.focus === "function" &&
+    !elements.kioskRemotePlatformInput.disabled
+  ) {
+    elements.kioskRemotePlatformInput.focus();
+  }
+}
+
+function handleKioskActiveAppSelectChange() {
+  renderKioskActiveVersionOptions(elements.kioskActiveAppSelect.value, "");
+}
+
+function handleKioskRegionFilterChange(event) {
+  state.ui.kioskRegionFilter = event.target.value || "all";
+  renderKioskListPanel();
+}
+
+function handleKioskReset() {
+  state.ui.editingKioskId = null;
+  renderKioskEditor();
+}
+
+async function handleKioskListClick(event) {
+  const actionButton = event.target.closest("[data-kiosk-action]");
+  if (!actionButton) {
+    return;
+  }
+
+  const kioskId = actionButton.dataset.kioskId;
+  if (!kioskId) {
+    return;
+  }
+
+  if (actionButton.dataset.kioskAction === "edit") {
+    state.ui.editingKioskId = kioskId;
+    state.ui.activeKioskDetailPanel = "editor";
+    render();
+    window.requestAnimationFrame(() => {
+      if (
+        typeof elements.kioskRegionInput.focus === "function" &&
+        !elements.kioskRegionInput.disabled
+      ) {
+        elements.kioskRegionInput.focus();
+      }
+    });
+    return;
+  }
+
+  if (actionButton.dataset.kioskAction !== "delete") {
+    return;
+  }
+
+  const kiosk = state.workspace.kiosks.find((item) => item.id === kioskId);
+  if (!kiosk) {
+    showToast("Kiosk 不存在");
+    return;
+  }
+
+  if (!window.confirm(`确认删除 Kiosk“${kiosk.region} / ${kiosk.location}”吗？`)) {
+    return;
+  }
+
+  try {
+    if (state.workspace.mode === "cloud") {
+      await apiRequest(`/api/kiosks/${kioskId}`, {
+        method: "DELETE",
+      });
+      await loadCloudWorkspace({ projectId: state.workspace.currentProjectId });
+    } else {
+      updateGuestWorkspace((workspace) => {
+        workspace.kiosks = workspace.kiosks.filter((item) => item.id !== kioskId);
+        touchGuestProject(workspace, kiosk.projectId, new Date().toISOString());
+      });
+      syncGuestView(state.workspace.currentProjectId);
+    }
+
+    if (state.ui.editingKioskId === kioskId) {
+      state.ui.editingKioskId = null;
+      state.ui.activeKioskDetailPanel = null;
+    }
+
+    render();
+    showToast("Kiosk 已删除");
   } catch (error) {
     showToast(error.message);
   }
@@ -1483,6 +1846,41 @@ function handleTaskFilterChange() {
   state.ui.detailStatusFilter = elements.taskStatusFilterInput.value || "all";
   state.ui.detailTagFilter = elements.taskTagFilterInput.value || "all";
   renderTaskListPanel();
+}
+
+function handleTaskCalendarDayClick(event) {
+  const dayButton = event.target.closest("[data-calendar-date]");
+  if (!dayButton || dayButton.disabled) {
+    return;
+  }
+
+  const selectedDate = dayButton.dataset.calendarDate;
+  if (!selectedDate) {
+    return;
+  }
+
+  state.ui.taskCalendarSelectedDate = selectedDate;
+  state.ui.taskCalendarMonth = getCalendarMonthKey(selectedDate);
+  renderTaskCalendarPanel();
+}
+
+function handleTaskCalendarTodayClick() {
+  const today = todayString();
+  state.ui.taskCalendarSelectedDate = today;
+  state.ui.taskCalendarMonth = getCalendarMonthKey(today);
+  renderTaskCalendarPanel();
+}
+
+function shiftTaskCalendarMonth(offset) {
+  const [year, month] = state.ui.taskCalendarMonth.split("-").map(Number);
+  const nextMonth = new Date(year, month - 1 + offset, 1);
+  state.ui.taskCalendarMonth = formatDateInputValue(nextMonth).slice(0, 7);
+
+  if (state.ui.taskCalendarSelectedDate.slice(0, 7) !== state.ui.taskCalendarMonth) {
+    state.ui.taskCalendarSelectedDate = `${state.ui.taskCalendarMonth}-01`;
+  }
+
+  renderTaskCalendarPanel();
 }
 
 function handleTaskFormStatusChange(event) {
@@ -1957,6 +2355,15 @@ async function handleAppDelete() {
         workspace.versions = workspace.versions.filter(
           (version) => version.appId !== currentApp.id
         );
+        workspace.kiosks = workspace.kiosks.map((kiosk) =>
+          kiosk.activeAppId === currentApp.id
+            ? {
+                ...kiosk,
+                activeAppId: "",
+                activeVersionId: "",
+              }
+            : kiosk
+        );
         if (workspace.currentAppId === currentApp.id) {
           workspace.currentAppId = null;
         }
@@ -1984,14 +2391,17 @@ async function handleVersionFormSubmit(event) {
   }
 
   const versionName = elements.versionNameInput.value.trim();
-  if (!versionName) {
-    showToast("请输入版本号");
+  const buildNumber = elements.buildNumberInput.value.trim();
+  const resourceVersion = elements.resourceVersionInput.value.trim();
+  if (!versionName && !buildNumber && !resourceVersion) {
+    showToast("版本号、构建号、资源版本至少填写一项");
     return;
   }
 
   const payload = {
     versionName,
-    buildNumber: elements.buildNumberInput.value.trim(),
+    buildNumber,
+    resourceVersion,
     description: elements.versionDescriptionInput.value.trim(),
     notes: elements.versionNotesInput.value.trim(),
     owner: elements.versionOwnerInput.value.trim(),
@@ -2218,17 +2628,27 @@ async function handleVersionListClick(event) {
     return;
   }
 
-  if (actionButton.dataset.versionAction !== "delete") {
-    return;
-  }
-
   const version = state.appWorkspace.versions.find((item) => item.id === versionId);
   if (!version) {
     showToast("版本不存在");
     return;
   }
 
-  if (!window.confirm(`确认删除版本“${version.versionName}”吗？`)) {
+  if (actionButton.dataset.versionAction === "copy") {
+    try {
+      await writeTextToClipboard(buildVersionSummaryText(version));
+      showToast("版本信息已复制");
+    } catch (error) {
+      showToast(error.message);
+    }
+    return;
+  }
+
+  if (actionButton.dataset.versionAction !== "delete") {
+    return;
+  }
+
+  if (!window.confirm(`确认删除版本“${buildVersionDisplayName(version)}”吗？`)) {
     return;
   }
 
@@ -2244,6 +2664,14 @@ async function handleVersionListClick(event) {
     } else {
       updateGuestWorkspace((workspace) => {
         workspace.versions = workspace.versions.filter((item) => item.id !== versionId);
+        workspace.kiosks = workspace.kiosks.map((kiosk) =>
+          kiosk.activeVersionId === versionId
+            ? {
+                ...kiosk,
+                activeVersionId: "",
+              }
+            : kiosk
+        );
         touchGuestApp(workspace, version.appId, new Date().toISOString());
       });
       syncGuestAppView(state.appWorkspace.currentAppId, {
@@ -2531,6 +2959,7 @@ async function loadCloudWorkspace(options = {}) {
       currentProjectId: board.project?.id || selectedProject.id,
       currentProject: board.project || selectedProject,
       tags: Array.isArray(board.tags) ? sortTags(board.tags) : [],
+      kiosks: Array.isArray(board.kiosks) ? board.kiosks : [],
       tasks: Array.isArray(board.tasks) ? board.tasks : [],
       overview,
     };
@@ -2576,6 +3005,11 @@ function syncGuestView(preferredProjectId = null, options = {}) {
     tags: currentProject
       ? sortTags(state.guestWorkspace.tags.filter((tag) => tag.projectId === currentProject.id))
       : [],
+    kiosks: currentProject
+      ? sortKiosksForDisplay(
+          state.guestWorkspace.kiosks.filter((kiosk) => kiosk.projectId === currentProject.id)
+        )
+      : [],
     tasks: currentProject
       ? state.guestWorkspace.tasks.filter((task) => task.projectId === currentProject.id)
       : [],
@@ -2602,11 +3036,15 @@ async function loadCloudAppWorkspace(options = {}) {
       return;
     }
 
-    const [appsResponse, overviewResponse] = await Promise.all([
+    const [appsResponse, overviewResponse, versionsResponse] = await Promise.all([
       apiRequest(`/api/projects/${selectedProjectId}/apps`),
       apiRequest(`/api/projects/${selectedProjectId}/apps/overview`),
+      apiRequest(`/api/projects/${selectedProjectId}/apps/versions`),
     ]);
     const apps = Array.isArray(appsResponse.apps) ? sortProjects(appsResponse.apps) : [];
+    const projectVersions = Array.isArray(versionsResponse.versions)
+      ? versionsResponse.versions
+      : [];
     const overview = normalizeAppOverviewPayload(overviewResponse);
     const selectedApp = resolveSelectedProject(apps, appId || state.appWorkspace.currentAppId);
 
@@ -2615,6 +3053,7 @@ async function loadCloudAppWorkspace(options = {}) {
         ...createEmptyAppWorkspaceView("cloud"),
         projectId: selectedProjectId,
         apps,
+        projectVersions,
         overview,
       };
       syncAppEditorStateAfterWorkspaceSync({ preserveAppCreateMode });
@@ -2628,6 +3067,7 @@ async function loadCloudAppWorkspace(options = {}) {
       mode: "cloud",
       projectId: selectedProjectId,
       apps: boardApps,
+      projectVersions,
       currentAppId: board.app?.id || selectedApp.id,
       currentApp: board.app || selectedApp,
       versions: Array.isArray(board.versions) ? board.versions : [],
@@ -2662,6 +3102,10 @@ function syncGuestAppView(preferredAppId = null, options = {}) {
     apps.find((app) => !app.archived) ||
     apps[0] ||
     null;
+  const appIds = new Set(apps.map((app) => app.id));
+  const projectVersions = state.guestWorkspace.versions.filter((version) =>
+    appIds.has(version.appId)
+  );
 
   state.guestWorkspace.currentAppId = currentApp ? currentApp.id : null;
 
@@ -2669,6 +3113,7 @@ function syncGuestAppView(preferredAppId = null, options = {}) {
     mode: "guest",
     projectId: selectedProjectId,
     apps,
+    projectVersions,
     currentAppId: currentApp ? currentApp.id : null,
     currentApp,
     versions: currentApp
@@ -2980,6 +3425,8 @@ function render() {
   renderProjectEditDialog();
   renderOverview();
   renderDetails();
+  renderSchedule();
+  renderKioskDetails();
   renderAppOverview();
   renderAppDetails();
   renderAuth();
@@ -3033,7 +3480,7 @@ function renderToolbox() {
   if (state.ui.activeTool === "projects") {
     elements.toolboxProjectName.textContent = currentProject ? currentProject.name : "项目管理";
     elements.toolboxProjectMeta.textContent = currentProject
-      ? `当前项目已作为任务管理和 App 版本管理的统一容器。${activeTool.description}`
+      ? `当前项目已作为任务管理、日程表、Kiosk 统计和 App 版本管理的统一容器。${activeTool.description}`
       : activeTool.description;
     return;
   }
@@ -3050,6 +3497,22 @@ function renderToolbox() {
       ? `当前项目共有 ${state.workspace.tasks.length} 项任务，创建于 ${formatDateTime(
           currentProject.createdAt
         )}。${activeTool.description}`
+      : activeTool.description;
+    return;
+  }
+
+  if (state.ui.activeTool === "schedule") {
+    elements.toolboxProjectName.textContent = currentProject ? currentProject.name : "日程表";
+    elements.toolboxProjectMeta.textContent = currentProject
+      ? `当前项目共有 ${state.workspace.tasks.length} 项任务，可按日期查看开始、截止和完成安排。${activeTool.description}`
+      : activeTool.description;
+    return;
+  }
+
+  if (state.ui.activeTool === "kiosk-details") {
+    elements.toolboxProjectName.textContent = currentProject ? currentProject.name : "Kiosk 统计";
+    elements.toolboxProjectMeta.textContent = currentProject
+      ? `当前项目共有 ${state.workspace.kiosks.length} 台 Kiosk，可统一维护设备、打印机和远控资料。${activeTool.description}`
       : activeTool.description;
     return;
   }
@@ -3267,7 +3730,7 @@ function renderProjectManagement() {
   if (!projects.length) {
     elements.projectManagerList.innerHTML = createEmptyStateMarkup(
       "还没有项目",
-      "点击顶部“新建项目”，先创建一个任务和 App 的统一容器。"
+      "点击顶部“新建项目”，先创建一个任务、Kiosk 和 App 的统一容器。"
     );
   } else {
     elements.projectManagerList.innerHTML = projects
@@ -3297,6 +3760,9 @@ function renderProjectManagement() {
                 )}</span>
                 <span class="priority-pill priority-low">版本 ${escapeHtml(
                   String(summary.versionCount || 0)
+                )}</span>
+                <span class="priority-pill priority-low">Kiosk ${escapeHtml(
+                  String(summary.kioskCount || 0)
                 )}</span>
               </div>
             </div>
@@ -3340,6 +3806,449 @@ function renderProjectManagement() {
   }
 }
 
+function renderKioskDetails() {
+  const currentProject = state.workspace.currentProject;
+
+  elements.kioskProjectSelect.innerHTML = buildProjectOptions(state.workspace.projects, "暂无项目");
+  elements.kioskProjectSelect.value = currentProject?.id || "";
+  elements.kioskProjectSelect.disabled = !state.workspace.projects.length;
+  elements.projectKioskNewButton.disabled = !currentProject;
+
+  renderKioskEditor();
+  renderKioskListPanel();
+  renderKioskDetailPanels();
+}
+
+function renderKioskEditor() {
+  const currentProject = state.workspace.currentProject;
+  const kiosks = sortKiosksForDisplay(state.workspace.kiosks || []);
+  const editingKiosk = kiosks.find((kiosk) => kiosk.id === state.ui.editingKioskId) || null;
+  const kioskPlatformState = resolvePresetOrCustomValue(
+    editingKiosk?.kioskPlatform,
+    KIOSK_PLATFORM_OPTIONS
+  );
+  const remotePlatformState = resolvePresetOrCustomValue(
+    editingKiosk?.remotePlatform,
+    KIOSK_REMOTE_PLATFORM_OPTIONS
+  );
+
+  if (state.ui.editingKioskId && !editingKiosk) {
+    state.ui.editingKioskId = null;
+  }
+
+  elements.kioskEditorModeBadge.textContent = editingKiosk ? "编辑 Kiosk" : "新 Kiosk";
+  elements.kioskProjectHint.textContent = currentProject
+    ? `当前项目：${currentProject.name}。这里可以维护所属地区、位置、小票机连接方式、平台和远控信息。`
+    : "请先通过“项目管理”创建或选择项目，再在这里录入 Kiosk。";
+  elements.kioskIdInput.value = editingKiosk?.id || "";
+  elements.kioskRegionInput.value = editingKiosk?.region || "";
+  elements.kioskLocationInput.value = editingKiosk?.location || "";
+  elements.kioskPrinterConnectionInput.value = editingKiosk?.printerConnection || "usb";
+  elements.kioskPrinterModelInput.value = editingKiosk?.printerModel || "";
+  elements.kioskPrinterNotesInput.value = editingKiosk?.printerNotes || "";
+  elements.kioskPlatformSelect.value = kioskPlatformState.selectedValue;
+  elements.kioskPlatformInput.value = kioskPlatformState.customValue;
+  elements.kioskRemotePlatformSelect.value = remotePlatformState.selectedValue;
+  elements.kioskRemotePlatformInput.value = remotePlatformState.customValue;
+  elements.kioskRemoteCodeInput.value = editingKiosk?.remoteCode || "";
+  renderKioskUsageSelectors(editingKiosk);
+  elements.kioskNotesInput.value = editingKiosk?.notes || "";
+  elements.kioskSubmitButton.textContent = editingKiosk ? "保存 Kiosk" : "创建 Kiosk";
+  elements.kioskResetButton.textContent = editingKiosk ? "取消编辑" : "清空表单";
+  setFormDisabled(elements.kioskForm, !currentProject);
+  toggleSelectCustomInput(elements.kioskPlatformSelect, elements.kioskPlatformInput);
+  toggleSelectCustomInput(elements.kioskRemotePlatformSelect, elements.kioskRemotePlatformInput);
+  updateKioskActiveVersionSelectState();
+}
+
+function renderKioskListPanel() {
+  const currentProject = state.workspace.currentProject;
+  const kiosks = sortKiosksForDisplay(state.workspace.kiosks || []);
+  const availableRegions = getAvailableKioskRegions(kiosks);
+
+  if (
+    state.ui.kioskRegionFilter !== "all" &&
+    !availableRegions.includes(state.ui.kioskRegionFilter)
+  ) {
+    state.ui.kioskRegionFilter = "all";
+  }
+
+  const filteredKiosks = kiosks.filter(
+    (kiosk) =>
+      state.ui.kioskRegionFilter === "all" || kiosk.region === state.ui.kioskRegionFilter
+  );
+  const summary = summarizeKiosks(filteredKiosks);
+  const isRegionFilterActive = state.ui.kioskRegionFilter !== "all";
+
+  elements.kioskRegionFilterInput.innerHTML = buildKioskRegionFilterOptions(availableRegions);
+  elements.kioskRegionFilterInput.value = state.ui.kioskRegionFilter;
+  elements.kioskRegionFilterInput.disabled = !currentProject || availableRegions.length === 0;
+
+  elements.projectKioskCountBadge.textContent = currentProject
+    ? isRegionFilterActive
+      ? `${filteredKiosks.length} / ${kiosks.length} 台 Kiosk`
+      : `${kiosks.length} 台 Kiosk`
+    : "0 台 Kiosk";
+  elements.projectKioskMeta.textContent = currentProject
+    ? isRegionFilterActive
+      ? `当前项目“${currentProject.name}”下共有 ${kiosks.length} 台 Kiosk，当前按地区“${state.ui.kioskRegionFilter}”显示 ${filteredKiosks.length} 台。`
+      : `当前项目“${currentProject.name}”下共有 ${kiosks.length} 台 Kiosk，可统一维护打印机连接、平台和远控信息。`
+    : "这里会列出当前项目的全部 Kiosk、打印机信息和远控信息。";
+  elements.projectKioskStats.innerHTML = renderKioskStats(summary, currentProject);
+
+  if (!currentProject) {
+    elements.projectKioskList.innerHTML = createEmptyStateMarkup(
+      "还没有项目",
+      "先通过“项目管理”创建项目，然后再在这里查看和维护 Kiosk。"
+    );
+    return;
+  }
+
+  if (!kiosks.length) {
+    elements.projectKioskList.innerHTML = createEmptyStateMarkup(
+      "当前项目还没有 Kiosk",
+      "先填写地区、位置和设备信息，为这个项目创建第一台 Kiosk。"
+    );
+    return;
+  }
+
+  if (!filteredKiosks.length) {
+    elements.projectKioskList.innerHTML = createEmptyStateMarkup(
+      "当前地区下没有 Kiosk",
+      "试试切换到其他地区分类，或者把筛选改回“全部地区”。"
+    );
+    return;
+  }
+
+  elements.projectKioskList.innerHTML = filteredKiosks
+    .map((kiosk) => renderKioskRecord(kiosk))
+    .join("");
+}
+
+function renderKioskDetailPanels() {
+  const activePanel =
+    state.ui.activeTool === "kiosk-details" ? state.ui.activeKioskDetailPanel : null;
+  const isEditorPanelOpen = activePanel === "editor";
+
+  syncOverlayBodyState(Boolean(activePanel));
+  elements.kioskDetailPanelBackdrop.hidden = !activePanel;
+  elements.kioskDetailPanel.hidden = !isEditorPanelOpen;
+  elements.kioskDetailPanel.setAttribute("aria-hidden", String(!isEditorPanelOpen));
+  elements.projectKioskNewButton.setAttribute("aria-expanded", String(isEditorPanelOpen));
+}
+
+function renderKioskStats(summary, currentProject) {
+  if (!currentProject) {
+    return "";
+  }
+
+  return `
+    <span class="priority-pill priority-high">地区 ${escapeHtml(String(summary.regionCount))}</span>
+    <span class="priority-pill priority-medium">USB ${escapeHtml(String(summary.usbCount))}</span>
+    <span class="priority-pill priority-medium">蓝牙 ${escapeHtml(
+      String(summary.bluetoothCount)
+    )}</span>
+    <span class="priority-pill priority-medium">WiFi ${escapeHtml(String(summary.wifiCount))}</span>
+  `;
+}
+
+function getAvailableKioskRegions(kiosks) {
+  return [...new Set(kiosks.map((kiosk) => String(kiosk.region || "").trim()).filter(Boolean))].sort(
+    (left, right) => left.localeCompare(right, "zh-CN")
+  );
+}
+
+function buildKioskRegionFilterOptions(regions) {
+  return [
+    `<option value="all">全部地区</option>`,
+    ...regions.map(
+      (region) => `<option value="${escapeHtml(region)}">${escapeHtml(region)}</option>`
+    ),
+  ].join("");
+}
+
+function renderKioskUsageSelectors(kiosk = null) {
+  const apps = getCurrentProjectApps();
+  const activeAppId =
+    kiosk?.activeAppId && apps.some((app) => app.id === kiosk.activeAppId)
+      ? kiosk.activeAppId
+      : "";
+
+  elements.kioskActiveAppSelect.innerHTML = buildKioskActiveAppOptions(apps);
+  elements.kioskActiveAppSelect.value = activeAppId;
+  renderKioskActiveVersionOptions(
+    activeAppId,
+    activeAppId ? kiosk?.activeVersionId || "" : "",
+    kiosk
+  );
+}
+
+function renderKioskActiveVersionOptions(activeAppId, selectedVersionId = "", kiosk = null) {
+  const versions = getKioskVersionsForApp(activeAppId);
+  const hasSelectedVersion = versions.some((version) => version.id === selectedVersionId);
+  const options = [
+    `<option value="">${activeAppId ? "未关联版本" : "先选择 App"}</option>`,
+    ...versions.map(
+      (version) =>
+        `<option value="${escapeHtml(version.id)}">${escapeHtml(
+          buildKioskVersionOptionLabel(version)
+        )}</option>`
+    ),
+  ];
+
+  if (selectedVersionId && !hasSelectedVersion) {
+    options.push(
+      `<option value="${escapeHtml(selectedVersionId)}">${escapeHtml(
+        buildKioskVersionFallbackLabel(kiosk)
+      )}</option>`
+    );
+  }
+
+  elements.kioskActiveVersionSelect.innerHTML = options.join("");
+  elements.kioskActiveVersionSelect.value =
+    hasSelectedVersion || selectedVersionId ? selectedVersionId : "";
+  updateKioskActiveVersionSelectState();
+}
+
+function updateKioskActiveVersionSelectState() {
+  elements.kioskActiveVersionSelect.disabled =
+    elements.kioskActiveAppSelect.disabled ||
+    !elements.kioskActiveAppSelect.value ||
+    elements.kioskActiveVersionSelect.options.length <= 1;
+}
+
+function buildKioskActiveAppOptions(apps) {
+  return [
+    `<option value="">${apps.length ? "未关联 App" : "当前项目暂无 App"}</option>`,
+    ...apps.map(
+      (app) =>
+        `<option value="${escapeHtml(app.id)}">${escapeHtml(
+          app.name || "未命名 App"
+        )}${app.archived ? " (已归档)" : ""}</option>`
+    ),
+  ].join("");
+}
+
+function getCurrentProjectApps() {
+  const projectId = state.workspace.currentProjectId;
+  if (!projectId) {
+    return [];
+  }
+
+  if (state.appWorkspace.projectId === projectId) {
+    return state.appWorkspace.apps || [];
+  }
+
+  if (state.workspace.mode === "guest") {
+    return sortProjects(state.guestWorkspace.apps.filter((app) => app.projectId === projectId));
+  }
+
+  return [];
+}
+
+function getCurrentProjectVersions() {
+  const projectId = state.workspace.currentProjectId;
+  if (!projectId) {
+    return [];
+  }
+
+  if (state.appWorkspace.projectId === projectId) {
+    return state.appWorkspace.projectVersions || state.appWorkspace.versions || [];
+  }
+
+  if (state.workspace.mode === "guest") {
+    const appIds = new Set(
+      state.guestWorkspace.apps
+        .filter((app) => app.projectId === projectId)
+        .map((app) => app.id)
+    );
+    return state.guestWorkspace.versions.filter((version) => appIds.has(version.appId));
+  }
+
+  return [];
+}
+
+function getKioskVersionsForApp(activeAppId) {
+  if (!activeAppId) {
+    return [];
+  }
+
+  return sortVersionsForDisplay(
+    getCurrentProjectVersions().filter((version) => version.appId === activeAppId)
+  );
+}
+
+function buildKioskVersionOptionLabel(version) {
+  return [
+    version.versionName || "",
+    version.buildNumber ? `构建 ${version.buildNumber}` : "",
+    version.resourceVersion ? `资源 ${version.resourceVersion}` : "",
+  ]
+    .filter(Boolean)
+    .join(" / ") || "未命名版本";
+}
+
+function buildKioskVersionFallbackLabel(kiosk) {
+  const label =
+    [
+      kiosk?.activeVersionName || "",
+      kiosk?.activeBuildNumber ? `构建 ${kiosk.activeBuildNumber}` : "",
+      kiosk?.activeResourceVersion ? `资源 ${kiosk.activeResourceVersion}` : "",
+    ]
+      .filter(Boolean)
+      .join(" / ") || "已关联版本";
+
+  return `${label}（未在当前项目版本列表中找到）`;
+}
+
+function resolveKioskUsageDisplay(kiosk) {
+  const currentProject = state.workspace.currentProject;
+  const apps = getCurrentProjectApps();
+  const versions = getCurrentProjectVersions();
+  const activeApp = apps.find((app) => app.id === kiosk.activeAppId) || null;
+  const activeVersion =
+    versions.find((version) => version.id === kiosk.activeVersionId) || null;
+
+  return {
+    projectName: currentProject?.name || "未选择项目",
+    appName: activeApp?.name || kiosk.activeAppName || "",
+    appVersion:
+      activeVersion?.versionName ||
+      activeVersion?.buildNumber ||
+      kiosk.activeVersionName ||
+      kiosk.activeBuildNumber ||
+      "未关联版本",
+    resourceVersion:
+      activeVersion?.resourceVersion || kiosk.activeResourceVersion || "未填写",
+  };
+}
+
+function resolvePresetOrCustomValue(value, presetOptions) {
+  const normalizedValue = String(value || "").trim();
+  if (!normalizedValue) {
+    return {
+      selectedValue: "",
+      customValue: "",
+    };
+  }
+
+  const matchedOption = presetOptions.find(
+    (option) => option.toLowerCase() === normalizedValue.toLowerCase()
+  );
+  if (matchedOption) {
+    return {
+      selectedValue: matchedOption,
+      customValue: "",
+    };
+  }
+
+  return {
+    selectedValue: "other",
+    customValue: normalizedValue,
+  };
+}
+
+function toggleSelectCustomInput(select, input) {
+  const shouldShowCustomInput = select.value === "other";
+  input.hidden = !shouldShowCustomInput;
+  input.disabled = select.disabled || !shouldShowCustomInput;
+}
+
+function getSelectOrCustomInputValue(select, input) {
+  if (select.value === "other") {
+    return input.value.trim();
+  }
+
+  return select.value.trim();
+}
+
+function renderKioskRecord(kiosk) {
+  const title = [kiosk.region, kiosk.location].filter(Boolean).join(" / ") || "未命名 Kiosk";
+  const connectionLabel =
+    KIOSK_PRINTER_CONNECTION_META[kiosk.printerConnection]?.label || "USB";
+  const usage = resolveKioskUsageDisplay(kiosk);
+  const usageSegments = [
+    `正在使用的项目：${usage.projectName}`,
+    usage.appName ? `App：${usage.appName}` : "",
+    `App 版本：${usage.appVersion}`,
+    `资源版本：${usage.resourceVersion}`,
+    `更新时间：${formatDateTime(kiosk.updatedAt)}`,
+  ].filter(Boolean);
+  const summarySegments = [
+    kiosk.printerModel ? `小票机：${kiosk.printerModel}` : "",
+    kiosk.kioskPlatform ? `Kiosk 平台：${kiosk.kioskPlatform}` : "",
+    kiosk.remotePlatform ? `远控平台：${kiosk.remotePlatform}` : "",
+    kiosk.remoteCode ? `远控码：${kiosk.remoteCode}` : "",
+  ].filter(Boolean);
+  const detailSegments = [
+    kiosk.printerNotes ? `小票机备注：${kiosk.printerNotes}` : "",
+    kiosk.notes ? `备注：${kiosk.notes}` : "",
+  ].filter(Boolean);
+
+  return `
+    <div class="manager-item">
+      <div>
+        <div class="manager-main">
+          <span class="manager-swatch" style="background:var(--accent);"></span>
+          <strong>${escapeHtml(title)}</strong>
+        </div>
+        <div class="meta-row">
+          <span class="status-pill status-doing">${escapeHtml(connectionLabel)}</span>
+          ${
+            kiosk.printerModel
+              ? `<span class="priority-pill priority-medium">${escapeHtml(kiosk.printerModel)}</span>`
+              : ""
+          }
+          ${
+            kiosk.kioskPlatform
+              ? `<span class="priority-pill priority-low">平台 ${escapeHtml(
+                  kiosk.kioskPlatform
+                )}</span>`
+              : ""
+          }
+          ${
+            kiosk.remotePlatform
+              ? `<span class="priority-pill priority-low">远控 ${escapeHtml(
+                  kiosk.remotePlatform
+                )}</span>`
+              : ""
+          }
+        </div>
+        ${
+          summarySegments.length
+            ? `<p class="project-overview-copy">${escapeHtml(summarySegments.join(" | "))}</p>`
+            : ""
+        }
+        <p class="project-overview-copy">${escapeHtml(usageSegments.join(" | "))}</p>
+        ${
+          detailSegments.length
+            ? `<p class="project-overview-copy">${escapeHtml(detailSegments.join(" | "))}</p>`
+            : ""
+        }
+      </div>
+
+      <div class="meta-row">
+        <button
+          class="ghost-button mini-button"
+          type="button"
+          data-kiosk-action="edit"
+          data-kiosk-id="${escapeHtml(kiosk.id)}"
+        >
+          编辑
+        </button>
+        <button
+          class="danger-button mini-button"
+          type="button"
+          data-kiosk-action="delete"
+          data-kiosk-id="${escapeHtml(kiosk.id)}"
+        >
+          删除
+        </button>
+      </div>
+    </div>
+  `;
+}
+
 function renderProjectEditDialog() {
   const currentProject = state.workspace.currentProject;
   const isOpen = state.ui.projectEditDialogOpen && Boolean(currentProject);
@@ -3357,7 +4266,7 @@ function renderProjectEditDialog() {
   elements.projectDeleteButton.disabled = !currentProject;
   setFormDisabled(elements.projectForm, !currentProject);
   elements.projectFormCopy.textContent = currentProject
-    ? `当前正在编辑项目“${currentProject.name}”，任务管理和 App 版本管理都会直接使用这个项目。`
+    ? `当前正在编辑项目“${currentProject.name}”，任务管理、日程表、Kiosk 统计和 App 版本管理都会直接使用这个项目。`
     : "当前没有可编辑的项目。";
 
   renderTagManager();
@@ -3377,6 +4286,18 @@ function renderDetails() {
   renderTaskFilterControls();
   renderTaskListPanel();
   renderDetailPanels();
+}
+
+function renderSchedule() {
+  const currentProject = state.workspace.currentProject;
+
+  elements.scheduleProjectSelect.innerHTML = buildProjectOptions(
+    state.workspace.projects,
+    "暂无项目"
+  );
+  elements.scheduleProjectSelect.value = currentProject?.id || "";
+  elements.scheduleProjectSelect.disabled = !state.workspace.projects.length;
+  renderTaskCalendarPanel();
 }
 
 function renderTagManager() {
@@ -3473,18 +4394,24 @@ function renderDetailPanels() {
   const isTaskPanelOpen = activePanel === "task";
   const isPanelOpen = Boolean(activePanel);
 
-  document.body.classList.toggle(
-    "detail-panel-open",
-    isPanelOpen ||
-      Boolean(state.ui.activeTool === "app-details" && state.ui.activeAppDetailPanel) ||
-      state.ui.projectEditDialogOpen ||
-      state.ui.projectCreateDialogOpen
-  );
+  syncOverlayBodyState(isPanelOpen);
   elements.detailPanelBackdrop.hidden = !isPanelOpen;
   elements.detailTaskPanel.hidden = !isTaskPanelOpen;
   elements.detailTaskPanel.setAttribute("aria-hidden", String(!isTaskPanelOpen));
   elements.detailProjectPanelButton.setAttribute("aria-expanded", "false");
   elements.detailTaskPanelButton.setAttribute("aria-expanded", String(isTaskPanelOpen));
+}
+
+function syncOverlayBodyState(isCurrentPanelOpen) {
+  document.body.classList.toggle(
+    "detail-panel-open",
+    isCurrentPanelOpen ||
+      Boolean(state.ui.activeDetailPanel) ||
+      Boolean(state.ui.activeKioskDetailPanel) ||
+      Boolean(state.ui.activeAppDetailPanel) ||
+      state.ui.projectEditDialogOpen ||
+      state.ui.projectCreateDialogOpen
+  );
 }
 
 function renderTaskFilterControls() {
@@ -3507,6 +4434,501 @@ function renderTaskFilterControls() {
   elements.bulkStatusInput.disabled = !currentProject || state.ui.selectedTaskIds.length === 0;
   elements.applyBulkStatusButton.disabled =
     !currentProject || state.ui.selectedTaskIds.length === 0;
+}
+
+function renderTaskCalendarPanel() {
+  const currentProject = state.workspace.currentProject;
+  const tasks = sortTasksForDisplay(state.workspace.tasks);
+  const versions = sortVersionsForDisplay(getCurrentProjectVersions());
+  const apps = getCurrentProjectApps();
+  const appMap = new Map(apps.map((app) => [app.id, app]));
+  const eventMap = buildTaskCalendarEventMap(tasks, versions);
+  const selectedDate = normalizeCalendarDateKey(state.ui.taskCalendarSelectedDate);
+  const monthKey = normalizeCalendarMonthKey(state.ui.taskCalendarMonth, selectedDate);
+
+  state.ui.taskCalendarSelectedDate = selectedDate;
+  state.ui.taskCalendarMonth = monthKey;
+
+  elements.taskCalendarMonthLabel.textContent = formatCalendarMonthLabel(monthKey);
+  elements.taskCalendarPrevButton.disabled = !currentProject;
+  elements.taskCalendarTodayButton.disabled = !currentProject;
+  elements.taskCalendarNextButton.disabled = !currentProject;
+  elements.taskCalendarGrid.innerHTML = renderTaskCalendarGrid(monthKey, selectedDate, eventMap, {
+    enabled: Boolean(currentProject),
+    appMap,
+  });
+  renderTaskCalendarDetails(selectedDate, eventMap, currentProject, appMap);
+}
+
+function renderTaskCalendarGrid(monthKey, selectedDate, eventMap, options = {}) {
+  const { enabled = true, appMap = new Map() } = options;
+  const monthStartDate = parseCalendarMonthKey(monthKey);
+  const firstWeekday = (monthStartDate.getDay() + 6) % 7;
+  const gridStartDate = new Date(
+    monthStartDate.getFullYear(),
+    monthStartDate.getMonth(),
+    1 - firstWeekday
+  );
+  const today = todayString();
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(
+      gridStartDate.getFullYear(),
+      gridStartDate.getMonth(),
+      gridStartDate.getDate() + index
+    );
+    const dateKey = formatDateInputValue(day);
+    const entries = eventMap.get(dateKey) || [];
+    const isCurrentMonth = dateKey.slice(0, 7) === monthKey;
+    const isSelected = dateKey === selectedDate;
+    const isToday = dateKey === today;
+    const classNames = [
+      "task-calendar-day",
+      isCurrentMonth ? "" : "is-muted",
+      isSelected ? "is-selected" : "",
+      isToday ? "is-today" : "",
+      entries.length ? "has-task" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const ariaLabel = `${formatCalendarDetailTitle(dateKey)}，${
+      entries.length ? `${entries.length} 条安排` : "没有安排"
+    }`;
+
+    return `
+      <button
+        class="${escapeHtml(classNames)}"
+        type="button"
+        data-calendar-date="${escapeHtml(dateKey)}"
+        aria-label="${escapeHtml(ariaLabel)}"
+        aria-pressed="${String(isSelected)}"
+        ${enabled ? "" : "disabled"}
+      >
+        <span class="task-calendar-date-number">${escapeHtml(String(day.getDate()))}</span>
+        ${entries.length ? `<span class="task-calendar-dot" aria-hidden="true"></span>` : ""}
+        ${renderTaskCalendarDayPreview(entries, appMap)}
+      </button>
+    `;
+  }).join("");
+}
+
+function renderTaskCalendarDayPreview(entries, appMap = new Map()) {
+  if (!entries.length) {
+    return "";
+  }
+
+  const visibleEntries = entries.slice(0, 2);
+  const overflowCount = entries.length - visibleEntries.length;
+
+  return `
+    <span class="task-calendar-preview" aria-hidden="true">
+      ${visibleEntries
+        .map((entry) => {
+          const marker = getScheduleCalendarEntryMarker(entry);
+          const title = getScheduleCalendarEntryTitle(entry, appMap);
+
+          return `
+            <span class="task-calendar-preview-item">
+              <span class="task-calendar-preview-marker">${escapeHtml(marker)}</span>
+              ${escapeHtml(title)}
+            </span>
+          `;
+        })
+        .join("")}
+      ${
+        overflowCount > 0
+          ? `<span class="task-calendar-preview-more">+${escapeHtml(String(overflowCount))} 项</span>`
+          : ""
+      }
+    </span>
+  `;
+}
+
+function renderTaskCalendarDetails(selectedDate, eventMap, currentProject, appMap = new Map()) {
+  const entries = eventMap.get(selectedDate) || [];
+  const tagMap = new Map(state.workspace.tags.map((tag) => [tag.id, tag]));
+
+  elements.taskCalendarDetailTitle.textContent = formatCalendarDetailTitle(selectedDate);
+  elements.taskCalendarDetailBadge.textContent = currentProject ? `${entries.length} 条安排` : "0 条安排";
+
+  if (!currentProject) {
+    elements.taskCalendarDetailList.innerHTML = createEmptyInlineMarkup("请先选择项目");
+    return;
+  }
+
+  if (!entries.length) {
+    elements.taskCalendarDetailList.innerHTML = createEmptyInlineMarkup("当天没有任务或版本");
+    return;
+  }
+
+  elements.taskCalendarDetailList.innerHTML = entries
+    .map((entry) => renderScheduleCalendarDetailEntry(entry, tagMap, appMap))
+    .join("");
+}
+
+function renderScheduleCalendarDetailEntry(entry, tagMap, appMap) {
+  if (entry.kind === "version") {
+    return renderVersionCalendarDetailEntry(entry, appMap);
+  }
+
+  return renderTaskCalendarDetailEntry(entry, tagMap);
+}
+
+function renderTaskCalendarDetailEntry(entry, tagMap) {
+  const { task, markers } = entry;
+  const taskTags = Array.isArray(task.tagIds)
+    ? task.tagIds.map((tagId) => tagMap.get(tagId)).filter(Boolean)
+    : [];
+
+  return `
+    <article class="task-calendar-detail-item">
+      <div class="task-calendar-detail-title">
+        <strong>${escapeHtml(task.title || "未命名任务")}</strong>
+        <span class="status-pill status-${escapeHtml(task.status || "todo")}">
+          ${escapeHtml(STATUS_META[task.status]?.label || "未开始")}
+        </span>
+      </div>
+
+      <div class="meta-row">
+        ${markers
+          .map(
+            (marker) =>
+              `<span class="priority-pill priority-medium">${escapeHtml(marker)}</span>`
+          )
+          .join("")}
+        <span class="priority-pill priority-${escapeHtml(task.priority || "medium")}">
+          优先级 ${escapeHtml(PRIORITY_META[task.priority]?.label || "中")}
+        </span>
+        ${
+          task.assignee
+            ? `<span class="priority-pill priority-low">负责人 ${escapeHtml(task.assignee)}</span>`
+            : ""
+        }
+      </div>
+
+      ${renderTaskCalendarDateMeta(task)}
+
+      ${
+        task.description || task.notes
+          ? `<p>${escapeHtml(task.description || task.notes)}</p>`
+          : ""
+      }
+
+      ${
+        taskTags.length
+          ? `<div class="meta-row">
+              ${taskTags
+                .map(
+                  (tag) => `
+                    <span
+                      class="chip category"
+                      style="background:${escapeHtml(hexToSoftRgba(tag.color, 0.12))};color:${escapeHtml(
+                        tag.color
+                      )};"
+                    >
+                      ${escapeHtml(tag.name)}
+                    </span>
+                  `
+                )
+                .join("")}
+            </div>`
+          : ""
+      }
+    </article>
+  `;
+}
+
+function renderTaskCalendarDateMeta(task) {
+  const range = getTaskCalendarRange(task);
+  const dueDate = isCalendarDateKey(task.dueDate) ? task.dueDate : "";
+  const completedDate = isCalendarDateKey(task.completedDate) ? task.completedDate : "";
+  const pills = [];
+
+  if (range) {
+    pills.push(
+      `<span class="priority-pill priority-low">日程 ${escapeHtml(
+        formatCalendarDateRangeLabel(range.startDateKey, range.endDateKey)
+      )}</span>`
+    );
+  }
+
+  if (dueDate && range?.endDateKey !== dueDate) {
+    const dueLabel =
+      task.status === "done" && completedDate && completedDate < dueDate ? "原截止" : "截止";
+    pills.push(
+      `<span class="priority-pill priority-low">${escapeHtml(dueLabel)} ${escapeHtml(
+        formatDateOnly(dueDate)
+      )}</span>`
+    );
+  }
+
+  if (task.status === "done" && completedDate) {
+    pills.push(
+      `<span class="priority-pill priority-low">完成 ${escapeHtml(
+        formatDateOnly(completedDate)
+      )}</span>`
+    );
+  }
+
+  if (!pills.length) {
+    return "";
+  }
+
+  return `<div class="meta-row">${pills.join("")}</div>`;
+}
+
+function formatCalendarDateRangeLabel(startDateKey, endDateKey) {
+  if (!startDateKey || !endDateKey || startDateKey === endDateKey) {
+    return formatDateOnly(startDateKey || endDateKey);
+  }
+
+  return `${formatDateOnly(startDateKey)} 至 ${formatDateOnly(endDateKey)}`;
+}
+
+function renderVersionCalendarDetailEntry(entry, appMap) {
+  const { version, markers } = entry;
+  const app = appMap.get(version.appId) || null;
+
+  return `
+    <article class="task-calendar-detail-item">
+      <div class="task-calendar-detail-title">
+        <strong>${escapeHtml(buildVersionDisplayName(version))}</strong>
+        <span class="status-pill status-${escapeHtml(version.status || "todo")}">
+          ${escapeHtml(VERSION_STATUS_META[version.status]?.label || "待规划")}
+        </span>
+      </div>
+
+      <div class="meta-row">
+        ${markers
+          .map(
+            (marker) =>
+              `<span class="priority-pill priority-medium">${escapeHtml(marker)}</span>`
+          )
+          .join("")}
+        ${
+          app
+            ? `<span class="priority-pill priority-low">App ${escapeHtml(app.name || "未命名 App")}</span>`
+            : ""
+        }
+        <span class="priority-pill priority-${escapeHtml(version.priority || "medium")}">
+          优先级 ${escapeHtml(PRIORITY_META[version.priority]?.label || "中")}
+        </span>
+        <span class="priority-pill priority-low">
+          渠道 ${escapeHtml(VERSION_CHANNEL_META[version.channel]?.label || "正式发布")}
+        </span>
+        ${
+          version.owner
+            ? `<span class="priority-pill priority-low">负责人 ${escapeHtml(version.owner)}</span>`
+            : ""
+        }
+      </div>
+
+      ${
+        version.description
+          ? `<p>${escapeHtml(version.description)}</p>`
+          : ""
+      }
+      ${
+        version.notes
+          ? `<p><strong>备注：</strong>${escapeHtml(version.notes)}</p>`
+          : ""
+      }
+
+      <div class="meta-row">
+        ${
+          version.buildNumber
+            ? `<span class="priority-pill priority-low">构建 ${escapeHtml(version.buildNumber)}</span>`
+            : ""
+        }
+        ${
+          version.resourceVersion
+            ? `<span class="priority-pill priority-low">资源 ${escapeHtml(version.resourceVersion)}</span>`
+            : ""
+        }
+        ${
+          version.plannedDate
+            ? `<span class="priority-pill priority-low">计划 ${escapeHtml(
+                formatDateOnly(version.plannedDate)
+              )}</span>`
+            : ""
+        }
+        ${
+          version.releaseDate
+            ? `<span class="priority-pill priority-low">发布 ${escapeHtml(
+                formatDateOnly(version.releaseDate)
+              )}</span>`
+            : ""
+        }
+        ${
+          version.publishedDate
+            ? `<span class="priority-pill priority-low">上线 ${escapeHtml(
+                formatDateOnly(version.publishedDate)
+              )}</span>`
+            : ""
+        }
+      </div>
+    </article>
+  `;
+}
+
+function buildTaskCalendarEventMap(tasks, versions = []) {
+  const eventMap = new Map();
+
+  tasks.forEach((task) => {
+    appendScheduleCalendarEntries(eventMap, {
+      kind: "task",
+      item: task,
+      markersByDate: collectTaskCalendarMarkers(task),
+    });
+  });
+
+  versions.forEach((version) => {
+    appendScheduleCalendarEntries(eventMap, {
+      kind: "version",
+      item: version,
+      markersByDate: collectVersionCalendarMarkers(version),
+    });
+  });
+
+  return eventMap;
+}
+
+function collectTaskCalendarMarkers(task) {
+  const range = getTaskCalendarRange(task);
+  const markersByDate = new Map();
+
+  if (!range) {
+    return markersByDate;
+  }
+
+  const cursor = parseCalendarDateKey(range.startDateKey);
+  const endDate = parseCalendarDateKey(range.endDateKey);
+
+  while (cursor <= endDate) {
+    const dateKey = formatDateInputValue(cursor);
+    const markers = [];
+
+    if (range.hasStartDate && dateKey === task.startDate) {
+      markers.push("开始");
+    }
+
+    if (range.hasDueDate && dateKey === task.dueDate) {
+      markers.push("截止");
+    }
+
+    if (range.hasCompletedDate && task.status === "done" && dateKey === task.completedDate) {
+      markers.push("完成");
+    }
+
+    if (!markers.length) {
+      markers.push("持续");
+    }
+
+    markersByDate.set(dateKey, markers);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return markersByDate;
+}
+
+function getTaskCalendarRange(task) {
+  const hasStartDate = isCalendarDateKey(task.startDate);
+  const hasDueDate = isCalendarDateKey(task.dueDate);
+  const hasCompletedDate = isCalendarDateKey(task.completedDate);
+
+  if (!hasStartDate && !hasDueDate && !hasCompletedDate) {
+    return null;
+  }
+
+  let startDateKey = "";
+  let endDateKey = "";
+
+  if (hasStartDate) {
+    startDateKey = task.startDate;
+    endDateKey =
+      task.status === "done" && hasCompletedDate
+        ? task.completedDate
+        : hasDueDate
+          ? task.dueDate
+          : task.startDate;
+  } else if (hasDueDate) {
+    startDateKey = task.status === "done" && hasCompletedDate ? task.completedDate : task.dueDate;
+    endDateKey = startDateKey;
+  } else {
+    startDateKey = task.completedDate;
+    endDateKey = task.completedDate;
+  }
+
+  const startDate = parseCalendarDateKey(startDateKey);
+  const endDate = parseCalendarDateKey(endDateKey);
+
+  if (startDate > endDate) {
+    return {
+      startDateKey: endDateKey,
+      endDateKey: startDateKey,
+      hasStartDate,
+      hasDueDate,
+      hasCompletedDate,
+    };
+  }
+
+  return {
+    startDateKey,
+    endDateKey,
+    hasStartDate,
+    hasDueDate,
+    hasCompletedDate,
+  };
+}
+
+function collectVersionCalendarMarkers(version) {
+  const markersByDate = new Map();
+  const addMarker = (dateKey, marker) => {
+    if (!isCalendarDateKey(dateKey)) {
+      return;
+    }
+
+    const markers = markersByDate.get(dateKey) || [];
+    if (!markers.includes(marker)) {
+      markers.push(marker);
+    }
+    markersByDate.set(dateKey, markers);
+  };
+
+  addMarker(version.plannedDate, "计划");
+  addMarker(version.releaseDate, "发布");
+  addMarker(version.publishedDate, "上线");
+
+  return markersByDate;
+}
+
+function appendScheduleCalendarEntries(eventMap, entrySource) {
+  const { kind, item, markersByDate } = entrySource;
+
+  markersByDate.forEach((markers, dateKey) => {
+    const entries = eventMap.get(dateKey) || [];
+    entries.push({
+      kind,
+      [kind]: item,
+      markers,
+    });
+    eventMap.set(dateKey, entries);
+  });
+}
+
+function getScheduleCalendarEntryMarker(entry) {
+  return entry.markers[0] || (entry.kind === "version" ? "版本" : "任务");
+}
+
+function getScheduleCalendarEntryTitle(entry, appMap = new Map()) {
+  if (entry.kind === "version") {
+    const version = entry.version;
+    const app = appMap.get(version.appId) || null;
+    const versionName = buildVersionDisplayName(version);
+    return app?.name ? `${app.name} · ${versionName}` : versionName;
+  }
+
+  return entry.task.title || "未命名任务";
 }
 
 function renderTaskListPanel() {
@@ -3938,7 +5360,7 @@ function renderAppOverview() {
                       (version) => `
                         <div class="recent-task-item">
                           <div class="recent-task-head">
-                            <strong>${escapeHtml(version.versionName || "未命名版本")}</strong>
+                            <strong>${escapeHtml(buildVersionDisplayName(version))}</strong>
                             <span class="status-pill status-${escapeHtml(version.status || "todo")}">
                               ${escapeHtml(VERSION_STATUS_META[version.status]?.label || "待规划")}
                             </span>
@@ -3954,6 +5376,11 @@ function renderAppOverview() {
                             <span>
                               构建 ${escapeHtml(version.buildNumber || "未填")}
                             </span>
+                            ${
+                              version.resourceVersion
+                                ? `<span>资源 ${escapeHtml(version.resourceVersion)}</span>`
+                                : ""
+                            }
                             <span>更新于 ${escapeHtml(formatDateTime(version.updatedAt))}</span>
                           </div>
                         </div>
@@ -4022,11 +5449,12 @@ function renderVersionEditor() {
 
   elements.versionEditorModeBadge.textContent = editingVersion ? "编辑版本" : "新版本";
   elements.versionAppHint.textContent = currentApp
-    ? `当前项目：${currentProject?.name || "未选择"}，当前 App：${currentApp.name}。这里可以维护版本号、渠道、状态、优先级、日期和发布备注。`
+    ? `当前项目：${currentProject?.name || "未选择"}，当前 App：${currentApp.name}。这里可以维护版本号、构建号、资源版本、渠道、状态、优先级、日期和发布备注，其中版本号、构建号、资源版本至少填写一项。`
     : "请先选择项目和 App，再在这里录入版本。";
   elements.versionIdInput.value = editingVersion?.id || "";
   elements.versionNameInput.value = editingVersion?.versionName || "";
   elements.buildNumberInput.value = editingVersion?.buildNumber || "";
+  elements.resourceVersionInput.value = editingVersion?.resourceVersion || "";
   elements.versionDescriptionInput.value = editingVersion?.description || "";
   elements.versionNotesInput.value = editingVersion?.notes || "";
   elements.versionOwnerInput.value = editingVersion?.owner || "";
@@ -4049,13 +5477,7 @@ function renderAppDetailPanels() {
   const isVersionPanelOpen = activePanel === "version";
   const isPanelOpen = Boolean(activePanel);
 
-  document.body.classList.toggle(
-    "detail-panel-open",
-    isPanelOpen ||
-      Boolean(state.ui.activeTool === "details" && state.ui.activeDetailPanel) ||
-      state.ui.projectEditDialogOpen ||
-      state.ui.projectCreateDialogOpen
-  );
+  syncOverlayBodyState(isPanelOpen);
   elements.appDetailPanelBackdrop.hidden = !isPanelOpen;
   elements.appDetailAppPanel.hidden = !isAppPanelOpen;
   elements.appDetailVersionPanel.hidden = !isVersionPanelOpen;
@@ -4076,9 +5498,14 @@ function renderVersionFilterControls() {
   const currentApp = state.appWorkspace.currentApp;
 
   elements.versionSearchInput.value = state.ui.versionDetailSearch;
+  elements.versionBundleIdDisplayInput.value = currentApp?.bundleId || "";
+  elements.versionBundleIdDisplayInput.placeholder = currentApp
+    ? "当前 App 未设置包名 / 标识"
+    : "先选择 App";
   elements.versionStatusFilterInput.value = state.ui.versionDetailStatusFilter;
   elements.versionChannelFilterInput.value = state.ui.versionDetailChannelFilter;
   elements.versionSearchInput.disabled = !currentApp;
+  elements.versionBundleIdDisplayInput.disabled = !currentApp;
   elements.versionStatusFilterInput.disabled = !currentApp;
   elements.versionChannelFilterInput.disabled = !currentApp;
   elements.selectedVersionCountBadge.textContent = `已选 ${state.ui.selectedVersionIds.length} 项`;
@@ -4164,6 +5591,7 @@ function renderVersionListPanel() {
 function renderVersionRecord(version) {
   const isSelected = state.ui.selectedVersionIds.includes(version.id);
   const isExpanded = state.ui.expandedVersionRecordIds.includes(version.id);
+  const displayName = buildVersionDisplayName(version);
 
   return `
     <article class="task-record-card">
@@ -4177,7 +5605,7 @@ function renderVersionRecord(version) {
                 ${isSelected ? "checked" : ""}
               />
             </label>
-            <h3>${escapeHtml(version.versionName || "未命名版本")}</h3>
+            <h3>${escapeHtml(displayName)}</h3>
             <span class="status-pill status-${escapeHtml(version.status)}">
               ${escapeHtml(VERSION_STATUS_META[version.status]?.label || "待规划")}
             </span>
@@ -4200,6 +5628,14 @@ function renderVersionRecord(version) {
             data-version-id="${escapeHtml(version.id)}"
           >
             编辑
+          </button>
+          <button
+            class="ghost-button mini-button"
+            type="button"
+            data-version-action="copy"
+            data-version-id="${escapeHtml(version.id)}"
+          >
+            复制版本信息
           </button>
           <button
             class="danger-button mini-button"
@@ -4242,6 +5678,13 @@ function renderVersionRecord(version) {
                   version.buildNumber
                 )}</span>`
               : `<span class="priority-pill priority-low">未设置构建号</span>`
+          }
+          ${
+            version.resourceVersion
+              ? `<span class="priority-pill priority-low">资源 ${escapeHtml(
+                  version.resourceVersion
+                )}</span>`
+              : ""
           }
           ${
             version.plannedDate
@@ -4307,6 +5750,7 @@ function getFilteredAppVersions(versions) {
     const haystack = [
       version.versionName,
       version.buildNumber,
+      version.resourceVersion,
       version.owner,
       version.description,
       version.notes,
@@ -4358,8 +5802,8 @@ function renderAuth() {
   const isBusy = state.auth.loading || state.auth.submitting;
 
   elements.authCopy.textContent = isLoggedIn
-    ? "当前账号会话已建立，项目管理、任务管理和 App 版本管理都会直接连接云端工作区。"
-    : "当前未登录，项目管理、任务管理和 App 版本管理会使用浏览器本地游客工作区。登录后将切换到账号云端。";
+    ? "当前账号会话已建立，项目管理、Kiosk 统计、任务管理和 App 版本管理都会直接连接云端工作区。"
+    : "当前未登录，项目管理、Kiosk 统计、任务管理和 App 版本管理会使用浏览器本地游客工作区。登录后将切换到账号云端。";
 
   elements.authModeButtons.forEach((button) => {
     const isActive = button.dataset.authMode === state.auth.mode;
@@ -4436,11 +5880,11 @@ function renderDataTools() {
       ? "当前正在操作账号云端工作区。"
       : "当前正在操作浏览器本地游客工作区。";
   const guestMessage =
-    guestSummary.projectCount > 0 || guestSummary.appCount > 0
-      ? `浏览器本地还保留 ${guestSummary.projectCount} 个游客项目、${guestSummary.taskCount} 项任务、${guestSummary.tagCount} 个标签，以及 ${guestSummary.appCount} 个 App、${guestSummary.versionCount} 个版本。`
+    guestSummary.projectCount > 0 || guestSummary.appCount > 0 || guestSummary.kioskCount > 0
+      ? `浏览器本地还保留 ${guestSummary.projectCount} 个游客项目、${guestSummary.taskCount} 项任务、${guestSummary.tagCount} 个标签、${guestSummary.kioskCount} 台 Kiosk，以及 ${guestSummary.appCount} 个 App、${guestSummary.versionCount} 个版本。`
       : "浏览器本地没有额外游客数据，当前仅保留默认本地收件箱占位。";
   const projectMessage = currentProject
-    ? `当前项目“${currentProject.name}”可用于导出和清空已完成任务；项目导出会同时带上该项目下的 App 版本数据。`
+    ? `当前项目“${currentProject.name}”可用于导出和清空已完成任务；项目导出会同时带上该项目下的 Kiosk、App 和版本数据。`
     : visibleAppCount > 0
       ? "当前还没有选中项目；如果现在只想查看整体数据，可直接使用工作区导出。"
       : "请先导入 JSON、载入示例数据，或先在项目管理中创建项目。";
@@ -4453,6 +5897,7 @@ function renderUtilities() {
   const tasks = sortTasksForDisplay(state.workspace.tasks);
   const pendingTasks = tasks.filter((task) => task.status !== "done");
   const modeLabel = state.workspace.mode === "cloud" ? "云端账号模式" : "游客本地模式";
+  const totalKiosks = state.workspace.overview?.totals?.kioskCount || 0;
   const totalApps = state.workspace.overview?.totals?.appCount || 0;
   const totalVersions = state.workspace.overview?.totals?.versionCount || 0;
 
@@ -4472,8 +5917,8 @@ function renderUtilities() {
   elements.copyProjectJsonButton.disabled = !currentProject;
 
   elements.utilityContextCopy.textContent = currentProject
-    ? `当前工作在${modeLabel}下，项目“${currentProject.name}”共有 ${tasks.length} 项任务，其中 ${pendingTasks.length} 项仍未完成；整个工作区另外还包含 ${totalApps} 个 App、${totalVersions} 个版本。这里可以直接执行高频快捷操作。`
-    : `当前工作在${modeLabel}下，但还没有选中项目。当前工作区仍包含 ${totalApps} 个 App、${totalVersions} 个版本，可以先去任务详情或版本详情建立内容，再回来使用复制和导出工具。`;
+    ? `当前工作在${modeLabel}下，项目“${currentProject.name}”共有 ${tasks.length} 项任务，其中 ${pendingTasks.length} 项仍未完成；整个工作区另外还包含 ${totalKiosks} 台 Kiosk、${totalApps} 个 App、${totalVersions} 个版本。这里可以直接执行高频快捷操作。`
+    : `当前工作在${modeLabel}下，但还没有选中项目。当前工作区仍包含 ${totalKiosks} 台 Kiosk、${totalApps} 个 App、${totalVersions} 个版本，可以先去任务详情、项目管理或版本详情建立内容，再回来使用复制和导出工具。`;
 }
 
 function renderSyncPanel() {
@@ -4500,7 +5945,7 @@ function renderSyncPanel() {
     return;
   }
 
-  elements.syncMessage.textContent = `检测到浏览器本地仍有 ${guestSummary.projectCount} 个游客项目、${guestSummary.taskCount} 项任务、${guestSummary.tagCount} 个标签，以及 ${guestSummary.appCount} 个 App、${guestSummary.versionCount} 个版本。导入会显式写入当前账号，不会自动覆盖本地副本。`;
+  elements.syncMessage.textContent = `检测到浏览器本地仍有 ${guestSummary.projectCount} 个游客项目、${guestSummary.taskCount} 项任务、${guestSummary.tagCount} 个标签、${guestSummary.kioskCount} 台 Kiosk，以及 ${guestSummary.appCount} 个 App、${guestSummary.versionCount} 个版本。导入会显式写入当前账号，不会自动覆盖本地副本。`;
   elements.importGuestButton.disabled = false;
 }
 
@@ -4588,9 +6033,13 @@ function buildGuestWorkspaceOverview(workspace) {
   const totals = createEmptyStatusSummary();
   totals.appCount = 0;
   totals.versionCount = 0;
+  totals.kioskCount = 0;
   const projectSummaries = projects.map((project) => {
     const projectTasks = tasksByProjectId.get(project.id) || [];
     const projectApps = normalizedWorkspace.apps.filter((app) => app.projectId === project.id);
+    const projectKiosks = normalizedWorkspace.kiosks.filter(
+      (kiosk) => kiosk.projectId === project.id
+    );
     const summary = summarizeTasks(projectTasks);
     const versionCount = normalizedWorkspace.versions.filter((version) =>
       projectApps.some((app) => app.id === version.appId)
@@ -4603,12 +6052,14 @@ function buildGuestWorkspaceOverview(workspace) {
     totals.doneCount += summary.doneCount;
     totals.appCount += projectApps.length;
     totals.versionCount += versionCount;
+    totals.kioskCount += projectKiosks.length;
 
     return {
       ...project,
       ...summary,
       appCount: projectApps.length,
       versionCount,
+      kioskCount: projectKiosks.length,
       recentTasks: sortTasksByRecent(projectTasks).slice(0, 3).map((task) => ({
         id: task.id,
         title: task.title,
@@ -4662,6 +6113,7 @@ function buildGuestAppWorkspaceOverview(workspace, projectId) {
         id: version.id,
         versionName: version.versionName,
         buildNumber: version.buildNumber,
+        resourceVersion: version.resourceVersion,
         channel: version.channel,
         status: version.status,
         priority: version.priority,
@@ -4696,6 +6148,7 @@ function normalizeOverviewPayload(payload) {
           taskCount: Number(project.taskCount) || 0,
           appCount: Number(project.appCount) || 0,
           versionCount: Number(project.versionCount) || 0,
+          kioskCount: Number(project.kioskCount) || 0,
           todoCount: Number(project.todoCount) || 0,
           doingCount: Number(project.doingCount) || 0,
           reviewCount: Number(project.reviewCount) || 0,
@@ -4713,6 +6166,7 @@ function normalizeOverviewPayload(payload) {
       taskCount: Number(totals.taskCount) || 0,
       appCount: Number(totals.appCount) || 0,
       versionCount: Number(totals.versionCount) || 0,
+      kioskCount: Number(totals.kioskCount) || 0,
       todoCount: Number(totals.todoCount) || 0,
       doingCount: Number(totals.doingCount) || 0,
       reviewCount: Number(totals.reviewCount) || 0,
@@ -4731,6 +6185,7 @@ function createEmptyOverview() {
       taskCount: 0,
       appCount: 0,
       versionCount: 0,
+      kioskCount: 0,
       todoCount: 0,
       doingCount: 0,
       reviewCount: 0,
@@ -4809,6 +6264,7 @@ async function buildWorkspaceExportPayload() {
     projects: projectPayloads.map((payload) => ({
       project: payload.project || {},
       tags: Array.isArray(payload.tags) ? payload.tags : [],
+      kiosks: Array.isArray(payload.kiosks) ? payload.kiosks : [],
       tasks: Array.isArray(payload.tasks) ? payload.tasks : [],
       apps: Array.isArray(payload.apps) ? payload.apps : [],
     })),
@@ -4862,6 +6318,7 @@ async function importPayloadToCloud(payload) {
       importedApp: null,
       importedProjectCount: Number(projectResult.importedCount) || 0,
       importedAppCount: Number(projectResult.importedAppCount) || 0,
+      importedKioskCount: Number(projectResult.importedKioskCount) || 0,
     };
   }
 
@@ -4875,6 +6332,7 @@ async function importPayloadToCloud(payload) {
     importedApp: appResult.importedApps?.at(-1) || null,
     importedProjectCount: Number(appResult.importedProjects?.length) || 0,
     importedAppCount: Number(appResult.importedCount) || 0,
+    importedKioskCount: 0,
   };
 }
 
@@ -4895,6 +6353,7 @@ function payloadContainsProjectData(payload) {
     return (
       Array.isArray(payload.tasks) ||
       Array.isArray(payload.tags) ||
+      Array.isArray(payload.kiosks) ||
       Array.isArray(payload.apps)
     );
   }
@@ -4945,6 +6404,10 @@ function buildImportResultMessage(result) {
     segments.push(`已导入 ${result.importedAppCount} 个 App`);
   }
 
+  if (result.importedKioskCount) {
+    segments.push(`已导入 ${result.importedKioskCount} 台 Kiosk`);
+  }
+
   return segments.join("，") || "导入完成";
 }
 
@@ -4968,6 +6431,7 @@ function buildWorkspaceSummaryText() {
     } / 已完成 ${totals.doneCount || 0}`,
     `App 总数：${totals.appCount || 0}`,
     `版本总数：${totals.versionCount || 0}`,
+    `Kiosk 总数：${totals.kioskCount || 0}`,
   ];
 
   if (currentProject) {
@@ -4981,9 +6445,11 @@ function buildWorkspaceSummaryText() {
       lines.push(
         `${index + 1}. ${project.name}${project.archived ? " [已归档]" : ""}：${
           project.taskCount
-        } 项任务，${project.appCount || 0} 个 App，${project.versionCount || 0} 个版本（未开始 ${
-          project.todoCount
-        } / 进行中 ${project.doingCount} / 待验收 ${project.reviewCount} / 已完成 ${project.doneCount}）`
+        } 项任务，${project.appCount || 0} 个 App，${project.versionCount || 0} 个版本，${
+          project.kioskCount || 0
+        } 台 Kiosk（未开始 ${project.todoCount} / 进行中 ${project.doingCount} / 待验收 ${
+          project.reviewCount
+        } / 已完成 ${project.doneCount}）`
       );
     });
   }
@@ -5000,6 +6466,7 @@ function buildCurrentProjectSummaryText() {
   const tasks = sortTasksForDisplay(state.workspace.tasks);
   const summary = summarizeTasks(tasks);
   const projectApps = state.appWorkspace.projectId === currentProject.id ? state.appWorkspace.apps : [];
+  const projectKiosks = sortKiosksForDisplay(state.workspace.kiosks || []);
   const projectVersions =
     state.workspace.mode === "cloud"
       ? state.appWorkspace.overview?.totals?.versionCount || 0
@@ -5018,6 +6485,7 @@ function buildCurrentProjectSummaryText() {
     `任务总数：${summary.taskCount}`,
     `App 数量：${projectApps.length}`,
     `版本数量：${projectVersions}`,
+    `Kiosk 数量：${projectKiosks.length}`,
     `状态分布：未开始 ${summary.todoCount} / 进行中 ${summary.doingCount} / 待验收 ${summary.reviewCount} / 已完成 ${summary.doneCount}`,
     `项目说明补充：${buildProjectMetaCopy(currentProject, tasks)}`,
   ];
@@ -5064,6 +6532,67 @@ function buildPendingTaskListText() {
   return lines.join("\n");
 }
 
+function buildVersionSummaryText(version) {
+  if (!version) {
+    throw new Error("版本不存在");
+  }
+
+  const currentProject = state.workspace.currentProject;
+  const currentApp = state.appWorkspace.currentApp;
+  const lines = [
+    `版本信息：${buildVersionDisplayName(version)}`,
+    `所属项目：${currentProject?.name || "未选择"}`,
+    `所属 App：${currentApp?.name || "未选择"}`,
+    `构建号：${version.buildNumber || "未填写"}`,
+    `资源版本：${version.resourceVersion || "未填写"}`,
+    `状态：${VERSION_STATUS_META[version.status]?.label || "待规划"}`,
+    `优先级：${PRIORITY_META[version.priority]?.label || "中"}`,
+    `发布渠道：${VERSION_CHANNEL_META[version.channel]?.label || "正式发布"}`,
+    `负责人：${version.owner || "未填写"}`,
+  ];
+
+  if (version.releaseDate) {
+    lines.push(`计划发布日期：${formatDateOnly(version.releaseDate)}`);
+  }
+
+  if (version.publishedDate) {
+    lines.push(`实际发布日期：${formatDateOnly(version.publishedDate)}`);
+  }
+
+  if (version.description) {
+    lines.push(`版本说明：${version.description}`);
+  }
+
+  if (version.notes) {
+    lines.push(`发布备注：${version.notes}`);
+  }
+
+  return lines.join("\n");
+}
+
+function buildVersionDisplayName(version) {
+  if (!version) {
+    return "未命名版本";
+  }
+
+  const versionName = String(version.versionName || "").trim();
+  if (versionName) {
+    return versionName;
+  }
+
+  const resourceVersion = String(version.resourceVersion || "").trim();
+  if (resourceVersion) {
+    return `资源 ${resourceVersion}`;
+  }
+
+  const buildNumber = String(version.buildNumber || "").trim();
+  if (buildNumber) {
+    return `构建 ${buildNumber}`;
+  }
+
+  return "未命名版本";
+}
+
 function createEmptyStatusSummary() {
   return {
     taskCount: 0,
@@ -5081,6 +6610,16 @@ function createEmptyAppStatusSummary() {
     doingCount: 0,
     reviewCount: 0,
     doneCount: 0,
+  };
+}
+
+function createEmptyKioskSummary() {
+  return {
+    kioskCount: 0,
+    regionCount: 0,
+    usbCount: 0,
+    bluetoothCount: 0,
+    wifiCount: 0,
   };
 }
 
@@ -5118,6 +6657,28 @@ function summarizeVersions(versions) {
 
     return summary;
   }, createEmptyAppStatusSummary());
+}
+
+function summarizeKiosks(kiosks) {
+  const regions = new Set();
+
+  return kiosks.reduce((summary, kiosk) => {
+    summary.kioskCount += 1;
+    if (kiosk.region) {
+      regions.add(kiosk.region);
+      summary.regionCount = regions.size;
+    }
+
+    if (kiosk.printerConnection === "bluetooth") {
+      summary.bluetoothCount += 1;
+    } else if (kiosk.printerConnection === "wifi") {
+      summary.wifiCount += 1;
+    } else {
+      summary.usbCount += 1;
+    }
+
+    return summary;
+  }, createEmptyKioskSummary());
 }
 
 function buildProjectMetaCopy(project, tasks) {
@@ -5324,6 +6885,29 @@ function createGuestTaskRecord(projectId, payload) {
   };
 }
 
+function createGuestKioskRecord(projectId, payload) {
+  const now = new Date().toISOString();
+  return {
+    id: createId(),
+    projectId,
+    region: String(payload.region || "").trim(),
+    location: String(payload.location || "").trim(),
+    printerConnection: KIOSK_PRINTER_CONNECTION_META[payload.printerConnection]
+      ? payload.printerConnection
+      : "usb",
+    printerModel: String(payload.printerModel || "").trim(),
+    printerNotes: String(payload.printerNotes || "").trim(),
+    kioskPlatform: String(payload.kioskPlatform || "").trim(),
+    remotePlatform: String(payload.remotePlatform || "").trim(),
+    remoteCode: String(payload.remoteCode || "").trim(),
+    activeAppId: String(payload.activeAppId || "").trim(),
+    activeVersionId: String(payload.activeVersionId || "").trim(),
+    notes: String(payload.notes || "").trim(),
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 function createGuestVersionRecord(appId, payload) {
   const now = new Date().toISOString();
   const status = VERSION_STATUS_META[payload.status] ? payload.status : "todo";
@@ -5332,6 +6916,7 @@ function createGuestVersionRecord(appId, payload) {
     appId,
     versionName: String(payload.versionName || "").trim(),
     buildNumber: String(payload.buildNumber || "").trim(),
+    resourceVersion: String(payload.resourceVersion || "").trim(),
     description: String(payload.description || "").trim(),
     notes: String(payload.notes || "").trim(),
     owner: String(payload.owner || "").trim(),
@@ -5490,6 +7075,12 @@ function sortTasksForDisplay(tasks) {
   });
 }
 
+function sortKiosksForDisplay(kiosks) {
+  return [...kiosks].sort(
+    (left, right) => toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt)
+  );
+}
+
 function sortVersionsByRecent(versions) {
   return [...versions].sort(
     (left, right) => toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt)
@@ -5525,6 +7116,7 @@ function getMeaningfulGuestSummary(workspace) {
       projectCount: 0,
       taskCount: 0,
       tagCount: 0,
+      kioskCount: 0,
       appCount: 0,
       versionCount: 0,
     };
@@ -5538,6 +7130,9 @@ function getMeaningfulGuestSummary(workspace) {
     projectCount: meaningfulProjects.length,
     taskCount: workspace.tasks.length,
     tagCount: workspace.tags.length,
+    kioskCount: workspace.kiosks.filter((kiosk) =>
+      meaningfulProjects.some((project) => project.id === kiosk.projectId)
+    ).length,
     appCount: workspace.apps.filter((app) => meaningfulProjects.some((project) => project.id === app.projectId)).length,
     versionCount: workspace.versions.length,
   };
@@ -5609,6 +7204,9 @@ function normalizeGuestWorkspace(workspace) {
   normalizedWorkspace.tags = Array.isArray(normalizedWorkspace.tags)
     ? normalizedWorkspace.tags.map(normalizeGuestTag)
     : [];
+  normalizedWorkspace.kiosks = Array.isArray(normalizedWorkspace.kiosks)
+    ? normalizedWorkspace.kiosks.map(normalizeGuestKiosk)
+    : [];
   normalizedWorkspace.tasks = Array.isArray(normalizedWorkspace.tasks)
     ? normalizedWorkspace.tasks.map(normalizeGuestTask)
     : [];
@@ -5647,6 +7245,9 @@ function normalizeGuestWorkspace(workspace) {
   normalizedWorkspace.tags = normalizedWorkspace.tags.filter((tag) =>
     validProjectIds.has(tag.projectId)
   );
+  normalizedWorkspace.kiosks = normalizedWorkspace.kiosks.filter((kiosk) =>
+    validProjectIds.has(kiosk.projectId)
+  );
   normalizedWorkspace.tasks = normalizedWorkspace.tasks.filter((task) =>
     validProjectIds.has(task.projectId)
   );
@@ -5657,6 +7258,28 @@ function normalizeGuestWorkspace(workspace) {
   normalizedWorkspace.versions = normalizedWorkspace.versions.filter((version) =>
     validAppIds.has(version.appId)
   );
+  const appById = new Map(normalizedWorkspace.apps.map((app) => [app.id, app]));
+  const versionById = new Map(
+    normalizedWorkspace.versions.map((version) => [version.id, version])
+  );
+  normalizedWorkspace.kiosks = normalizedWorkspace.kiosks.map((kiosk) => {
+    const activeApp = appById.get(kiosk.activeAppId);
+    const activeVersion = versionById.get(kiosk.activeVersionId);
+    if (!activeApp || activeApp.projectId !== kiosk.projectId) {
+      return {
+        ...kiosk,
+        activeAppId: "",
+        activeVersionId: "",
+      };
+    }
+    if (!activeVersion || activeVersion.appId !== activeApp.id) {
+      return {
+        ...kiosk,
+        activeVersionId: "",
+      };
+    }
+    return kiosk;
+  });
 
   normalizedWorkspace.currentProjectId = validProjectIds.has(
     normalizedWorkspace.currentProjectId
@@ -5682,6 +7305,7 @@ function createEmptyGuestWorkspace() {
     currentAppId: null,
     projects: [project],
     tags: [],
+    kiosks: [],
     tasks: [],
     apps: [],
     versions: [],
@@ -5733,6 +7357,28 @@ function normalizeGuestTag(tag) {
     name: String(tag.name || "").trim(),
     color: normalizeHexColor(tag.color, "#245a73"),
     createdAt: tag.createdAt || new Date().toISOString(),
+  };
+}
+
+function normalizeGuestKiosk(kiosk) {
+  return {
+    id: String(kiosk.id || createId()),
+    projectId: String(kiosk.projectId || ""),
+    region: String(kiosk.region || "").trim(),
+    location: String(kiosk.location || "").trim(),
+    printerConnection: KIOSK_PRINTER_CONNECTION_META[kiosk.printerConnection]
+      ? kiosk.printerConnection
+      : "usb",
+    printerModel: String(kiosk.printerModel || "").trim(),
+    printerNotes: String(kiosk.printerNotes || "").trim(),
+    kioskPlatform: String(kiosk.kioskPlatform || "").trim(),
+    remotePlatform: String(kiosk.remotePlatform || "").trim(),
+    remoteCode: String(kiosk.remoteCode || "").trim(),
+    activeAppId: String(kiosk.activeAppId || "").trim(),
+    activeVersionId: String(kiosk.activeVersionId || "").trim(),
+    notes: String(kiosk.notes || "").trim(),
+    createdAt: kiosk.createdAt || new Date().toISOString(),
+    updatedAt: kiosk.updatedAt || kiosk.createdAt || new Date().toISOString(),
   };
 }
 
@@ -5795,6 +7441,7 @@ function normalizeGuestVersion(version) {
     appId: String(version.appId || ""),
     versionName: String(version.versionName || "").trim(),
     buildNumber: String(version.buildNumber || "").trim(),
+    resourceVersion: String(version.resourceVersion || "").trim(),
     description: String(version.description || "").trim(),
     notes: String(version.notes || "").trim(),
     owner: String(version.owner || "").trim(),
@@ -5822,6 +7469,7 @@ function normalizeGuestVersion(version) {
 function guestWorkspaceHasMeaningfulData(workspace) {
   return (
     workspace.projects.some((project) => guestProjectHasMeaningfulData(workspace, project.id)) ||
+    workspace.kiosks.length > 0 ||
     workspace.tasks.length > 0 ||
     workspace.versions.length > 0 ||
     workspace.tags.length > 0 ||
@@ -5837,8 +7485,9 @@ function guestProjectHasMeaningfulData(workspace, projectId) {
 
   const hasTaskData = workspace.tasks.some((task) => task.projectId === projectId);
   const hasTagData = workspace.tags.some((tag) => tag.projectId === projectId);
+  const hasKioskData = workspace.kiosks.some((kiosk) => kiosk.projectId === projectId);
   const hasAppData = workspace.apps.some((app) => app.projectId === projectId);
-  if (hasTaskData || hasTagData || hasAppData) {
+  if (hasTaskData || hasTagData || hasKioskData || hasAppData) {
     return true;
   }
 
@@ -5855,7 +7504,13 @@ function isDefaultPlaceholderGuestProject(project) {
 }
 
 function isPlaceholderGuestWorkspace(workspace) {
-  if (workspace.tasks.length > 0 || workspace.tags.length > 0 || workspace.apps.length > 0 || workspace.versions.length > 0) {
+  if (
+    workspace.tasks.length > 0 ||
+    workspace.tags.length > 0 ||
+    workspace.kiosks.length > 0 ||
+    workspace.apps.length > 0 ||
+    workspace.versions.length > 0
+  ) {
     return false;
   }
 
@@ -5951,6 +7606,19 @@ function buildDemoWorkspacePayload() {
           { name: "开发", color: "#4f7a56" },
           { name: "发布", color: "#a84738" },
         ],
+        kiosks: [
+          {
+            region: "华东 / 上海",
+            location: "虹桥门店一层入口",
+            printerConnection: "usb",
+            printerModel: "EPSON TM-m30III",
+            printerNotes: "收银台下方 USB 直连，驱动已预装。",
+            kioskPlatform: "Windows 11",
+            remotePlatform: "向日葵",
+            remoteCode: "SH-HQ-01",
+            notes: "现场网络走商场专线，重启后需等待远控服务自启。",
+          },
+        ],
         tasks: [
           {
             title: "整理首页改版清单",
@@ -5995,6 +7663,7 @@ function buildDemoWorkspacePayload() {
               {
                 versionName: "1.9.0",
                 buildNumber: "19003",
+                resourceVersion: "web-assets-19003",
                 description: "准备接入版本中心和变更日志入口。",
                 notes: "先完成内部包，再推进 Beta 验证。",
                 owner: "Mila",
@@ -6049,6 +7718,7 @@ function buildDemoWorkspacePayload() {
               {
                 versionName: "2.4.0",
                 buildNumber: "24015",
+                resourceVersion: "ios-res-24015",
                 description: "补齐仪表盘发布页和版本入口联动。",
                 notes: "上线前需要确认审核素材和灰度回滚方案。",
                 owner: "Ethan",
@@ -6061,6 +7731,7 @@ function buildDemoWorkspacePayload() {
               {
                 versionName: "2.3.2",
                 buildNumber: "23208",
+                resourceVersion: "ios-res-23208-hotfix",
                 description: "修复登录态丢失和启动页白屏问题。",
                 notes: "这是一个 Hotfix 版本，保持最小改动上线。",
                 owner: "Luna",
@@ -6105,6 +7776,7 @@ function buildGuestProjectExportPayload(workspace, projectId) {
   const tagMap = new Map(tags.map((tag) => [tag.id, tag]));
   const tasks = workspace.tasks.filter((task) => task.projectId === projectId);
   const apps = workspace.apps.filter((app) => app.projectId === projectId);
+  const kiosks = workspace.kiosks.filter((kiosk) => kiosk.projectId === projectId);
 
   return {
     source: "task-atlas",
@@ -6120,6 +7792,17 @@ function buildGuestProjectExportPayload(workspace, projectId) {
     tags: tags.map((tag) => ({
       name: tag.name,
       color: tag.color,
+    })),
+    kiosks: kiosks.map((kiosk) => ({
+      region: kiosk.region,
+      location: kiosk.location,
+      printerConnection: kiosk.printerConnection,
+      printerModel: kiosk.printerModel,
+      printerNotes: kiosk.printerNotes,
+      kioskPlatform: kiosk.kioskPlatform,
+      remotePlatform: kiosk.remotePlatform,
+      remoteCode: kiosk.remoteCode,
+      notes: kiosk.notes,
     })),
     tasks: tasks.map((task) => ({
       title: task.title,
@@ -6177,6 +7860,7 @@ function buildGuestAppExportPayload(workspace, appId) {
     versions: versions.map((version) => ({
       versionName: version.versionName,
       buildNumber: version.buildNumber,
+      resourceVersion: version.resourceVersion,
       description: version.description,
       notes: version.notes,
       owner: version.owner,
@@ -6207,6 +7891,9 @@ function importPayloadIntoGuestWorkspace(workspace, payload) {
     tags: Array.isArray(sourceWorkspace.tags)
       ? sourceWorkspace.tags.map(normalizeGuestTag)
       : [],
+    kiosks: Array.isArray(sourceWorkspace.kiosks)
+      ? sourceWorkspace.kiosks.map(normalizeGuestKiosk)
+      : [],
     tasks: Array.isArray(sourceWorkspace.tasks)
       ? sourceWorkspace.tasks.map(normalizeGuestTask)
       : [],
@@ -6226,6 +7913,7 @@ function importPayloadIntoGuestWorkspace(workspace, payload) {
       currentAppId: null,
       projects: [],
       tags: [],
+      kiosks: [],
       tasks: [],
       apps: [],
       versions: [],
@@ -6275,6 +7963,7 @@ function importPayloadIntoGuestWorkspace(workspace, payload) {
 function importProjectPayloadIntoGuestWorkspace(workspace, payload) {
   const projectData = payload.project || payload;
   const tags = Array.isArray(payload.tags) ? payload.tags : [];
+  const kiosks = Array.isArray(payload.kiosks) ? payload.kiosks : [];
   const tasks = Array.isArray(payload.tasks) ? payload.tasks : [];
   const now = new Date().toISOString();
   const projectId = createGuestImportProject(workspace, {
@@ -6298,6 +7987,26 @@ function importProjectPayloadIntoGuestWorkspace(workspace, payload) {
       createdAt: now,
     });
     tagIdByName.set(normalizedName, tagId);
+  });
+
+  kiosks.forEach((kiosk) => {
+    workspace.kiosks.unshift(
+      normalizeGuestKiosk({
+        id: createId(),
+        projectId,
+        region: kiosk.region,
+        location: kiosk.location,
+        printerConnection: kiosk.printerConnection,
+        printerModel: kiosk.printerModel,
+        printerNotes: kiosk.printerNotes,
+        kioskPlatform: kiosk.kioskPlatform,
+        remotePlatform: kiosk.remotePlatform,
+        remoteCode: kiosk.remoteCode,
+        notes: kiosk.notes,
+        createdAt: now,
+        updatedAt: now,
+      })
+    );
   });
 
   tasks.forEach((task) => {
@@ -6408,8 +8117,9 @@ function importAppPayloadIntoGuestWorkspace(workspace, payload, projectId = null
     workspace.versions.push({
       id: createId(),
       appId,
-      versionName: String(version.versionName || "未命名版本").trim() || "未命名版本",
+      versionName: String(version.versionName || "").trim(),
       buildNumber: String(version.buildNumber || "").trim(),
+      resourceVersion: String(version.resourceVersion || "").trim(),
       description: String(version.description || "").trim(),
       notes: String(version.notes || "").trim(),
       owner: String(version.owner || "").trim(),
@@ -6499,6 +8209,88 @@ function resolveSelectedProject(projects, preferredProjectId) {
 function toTimestamp(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function isCalendarDateKey(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || "").trim());
+  if (!match) {
+    return false;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+function isCalendarMonthKey(value) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(value || "").trim());
+  if (!match) {
+    return false;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const date = new Date(year, month - 1, 1);
+  return date.getFullYear() === year && date.getMonth() === month - 1;
+}
+
+function normalizeCalendarDateKey(value) {
+  return isCalendarDateKey(value) ? String(value).trim() : todayString();
+}
+
+function normalizeCalendarMonthKey(value, fallbackDate = todayString()) {
+  if (isCalendarMonthKey(value)) {
+    return String(value).trim();
+  }
+
+  return getCalendarMonthKey(fallbackDate);
+}
+
+function getCalendarMonthKey(value) {
+  const normalizedValue = String(value || "").trim();
+  if (isCalendarMonthKey(normalizedValue)) {
+    return normalizedValue;
+  }
+
+  if (isCalendarDateKey(normalizedValue)) {
+    return normalizedValue.slice(0, 7);
+  }
+
+  return todayString().slice(0, 7);
+}
+
+function parseCalendarDateKey(value) {
+  const dateKey = normalizeCalendarDateKey(value);
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function parseCalendarMonthKey(value) {
+  const monthKey = normalizeCalendarMonthKey(value);
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(year, month - 1, 1);
+}
+
+function formatCalendarMonthLabel(monthKey) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "long",
+  }).format(parseCalendarMonthKey(monthKey));
+}
+
+function formatCalendarDetailTitle(dateKey) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+  }).format(parseCalendarDateKey(dateKey));
 }
 
 function updateTodayLabel() {
@@ -6666,6 +8458,7 @@ function createEmptyWorkspaceView(mode) {
     currentProjectId: null,
     currentProject: null,
     tags: [],
+    kiosks: [],
     tasks: [],
     overview: createEmptyOverview(),
   };
@@ -6676,6 +8469,7 @@ function createEmptyAppWorkspaceView(mode) {
     mode,
     projectId: null,
     apps: [],
+    projectVersions: [],
     currentAppId: null,
     currentApp: null,
     versions: [],

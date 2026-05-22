@@ -17,7 +17,7 @@
           <p class="eyebrow">Task Atlas</p>
           <h1>任务与版本管理</h1>
           <p class="brand-copy">
-            当前以项目管理为中心组织任务和 App 版本数据。项目统一在项目管理里维护，任务管理和 App 版本管理只使用已有项目。
+            当前以项目管理为中心组织任务、Kiosk 和 App 版本数据。项目统一在项目管理里维护，任务管理、日程表、Kiosk 统计和 App 版本管理只使用已有项目。
           </p>
         </div>
 
@@ -50,12 +50,18 @@
               <span class="toolbox-group-copy">
                 <span class="section-kicker toolbox-group-kicker">Category</span>
                 <strong>项目管理</strong>
-                <small>统一维护项目，再按项目处理任务和 App 版本。</small>
+                <small>统一维护项目，再按项目处理任务、Kiosk 和 App 版本。</small>
               </span>
               <span class="toolbox-group-arrow" aria-hidden="true"></span>
             </button>
 
             <div class="toolbox-group-list" id="toolbox-group-project-management">
+              <button class="toolbox-button" type="button" data-tool="schedule">
+                <span class="toolbox-button-kicker">Schedule</span>
+                <strong>日程表</strong>
+                <small>按日历查看当前项目的任务和版本安排，以及当天详情</small>
+              </button>
+
               <button class="toolbox-button" type="button" data-tool="projects">
                 <span class="toolbox-button-kicker">Projects</span>
                 <strong>项目管理</strong>
@@ -72,6 +78,12 @@
                 <span class="toolbox-button-kicker">Task Manager</span>
                 <strong>任务管理</strong>
                 <small>按已有项目查看任务列表，并为当前项目维护任务</small>
+              </button>
+
+              <button class="toolbox-button" type="button" data-tool="kiosk-details">
+                <span class="toolbox-button-kicker">Kiosk Center</span>
+                <strong>Kiosk 统计</strong>
+                <small>按已有项目查看 Kiosk 列表，并维护设备、打印机和远控信息</small>
               </button>
 
               <button class="toolbox-button" type="button" data-tool="app-overview">
@@ -331,7 +343,7 @@
                 <p class="eyebrow">Project Manager</p>
                 <h2>项目管理</h2>
                 <p class="topbar-copy">
-                  统一维护项目基本信息和项目标签。任务管理与 App 版本管理都会直接使用这里已有的项目。
+                  统一维护项目基本信息和标签。任务管理、日程表、Kiosk 统计与 App 版本管理都会直接使用这里已有的项目。
                 </p>
               </div>
               <div class="topbar-actions detail-quick-actions" aria-label="项目管理快捷操作">
@@ -613,6 +625,319 @@
             </section>
           </section>
 
+          <section class="workspace-view" data-view="schedule" hidden>
+            <header class="topbar panel">
+              <div>
+                <p class="eyebrow">Schedule</p>
+                <h2>日程表</h2>
+                <p class="topbar-copy">
+                  选择一个已有项目后，这里会按日期展示当前项目的任务和版本安排。
+                </p>
+              </div>
+              <div class="topbar-actions detail-quick-actions" aria-label="日程表快捷操作">
+                <div class="detail-project-switcher">
+                  <span>当前项目</span>
+                  <select id="scheduleProjectSelect" aria-label="选择日程表项目">
+                    <option value="">暂无项目</option>
+                  </select>
+                </div>
+                <button
+                  class="ghost-button"
+                  id="scheduleProjectPanelButton"
+                  type="button"
+                >
+                  打开项目管理
+                </button>
+              </div>
+            </header>
+
+            <div class="task-calendar-shell schedule-calendar-shell" aria-label="日程表">
+              <section class="task-calendar-board" aria-label="日程月历">
+                <div class="task-calendar-header">
+                  <div>
+                    <p class="section-kicker">Schedule Calendar</p>
+                    <h3 id="taskCalendarMonthLabel">日程表</h3>
+                  </div>
+                  <div class="task-calendar-actions">
+                    <button class="ghost-button mini-button" id="taskCalendarPrevButton" type="button">
+                      上个月
+                    </button>
+                    <button class="ghost-button mini-button" id="taskCalendarTodayButton" type="button">
+                      今天
+                    </button>
+                    <button class="ghost-button mini-button" id="taskCalendarNextButton" type="button">
+                      下个月
+                    </button>
+                  </div>
+                </div>
+
+                <div class="task-calendar-weekdays" aria-hidden="true">
+                  <span>一</span>
+                  <span>二</span>
+                  <span>三</span>
+                  <span>四</span>
+                  <span>五</span>
+                  <span>六</span>
+                  <span>日</span>
+                </div>
+                <div class="task-calendar-grid" id="taskCalendarGrid"></div>
+              </section>
+
+              <aside class="task-calendar-detail" aria-label="选中日期安排">
+                <div class="task-calendar-detail-head">
+                  <div>
+                    <p class="section-kicker">Day Detail</p>
+                    <h3 id="taskCalendarDetailTitle">当天安排</h3>
+                  </div>
+                  <span class="panel-badge" id="taskCalendarDetailBadge">0 条安排</span>
+                </div>
+                <div class="task-calendar-detail-list" id="taskCalendarDetailList"></div>
+              </aside>
+            </div>
+          </section>
+
+          <section class="workspace-view" data-view="kiosk-details" hidden>
+            <header class="topbar panel">
+              <div>
+                <p class="eyebrow">Kiosk Center</p>
+                <h2>Kiosk 统计</h2>
+                <p class="topbar-copy">
+                  选择一个已有项目后，这里会显示当前项目的 Kiosk 列表。项目本身请在“项目管理”模块中统一维护。
+                </p>
+              </div>
+              <div class="topbar-actions detail-quick-actions" aria-label="Kiosk 统计快捷操作">
+                <div class="detail-project-switcher">
+                  <span>当前项目</span>
+                  <select id="kioskProjectSelect" aria-label="选择 Kiosk 项目">
+                    <option value="">暂无项目</option>
+                  </select>
+                </div>
+                <button
+                  class="ghost-button"
+                  id="kioskProjectPanelButton"
+                  type="button"
+                >
+                  打开项目管理
+                </button>
+                <button
+                  class="primary-button"
+                  id="projectKioskNewButton"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="kioskDetailPanel"
+                >
+                  新建 Kiosk
+                </button>
+              </div>
+            </header>
+
+            <div class="detail-panel-backdrop" id="kioskDetailPanelBackdrop" hidden></div>
+
+            <div class="detail-panel-layer" aria-live="polite">
+              <section
+                class="panel panel-section detail-panel detail-panel-wide kiosk-detail-panel"
+                id="kioskDetailPanel"
+                aria-label="Kiosk 编辑面板"
+                role="dialog"
+                aria-modal="true"
+                hidden
+              >
+                <div class="section-heading">
+                  <div>
+                    <p class="section-kicker">Kiosk Editor</p>
+                    <h2>Kiosk 编辑</h2>
+                  </div>
+                  <div class="detail-panel-header-actions">
+                    <span class="panel-badge" id="kioskEditorModeBadge">新 Kiosk</span>
+                    <button
+                      class="ghost-button mini-button"
+                      type="button"
+                      data-kiosk-detail-panel-close="editor"
+                    >
+                      关闭
+                    </button>
+                  </div>
+                </div>
+
+                <p class="auth-copy" id="kioskProjectHint">
+                  选择项目后，在这里创建或编辑该项目下的 Kiosk。
+                </p>
+
+                <form class="task-form kiosk-editor-form" id="kioskForm">
+                  <input id="kioskIdInput" type="hidden" />
+
+                  <div class="field-grid">
+                    <label class="field" for="kioskRegionInput">
+                      <span>所属地区</span>
+                      <input
+                        id="kioskRegionInput"
+                        type="text"
+                        maxlength="80"
+                        placeholder="例如：华东 / 上海"
+                        required
+                      />
+                    </label>
+
+                    <label class="field" for="kioskLocationInput">
+                      <span>具体位置</span>
+                      <input
+                        id="kioskLocationInput"
+                        type="text"
+                        maxlength="160"
+                        placeholder="例如：虹桥门店一层入口"
+                        required
+                      />
+                    </label>
+                  </div>
+
+                  <div class="field-grid">
+                    <label class="field" for="kioskPrinterConnectionInput">
+                      <span>小票机连接方式</span>
+                      <select id="kioskPrinterConnectionInput">
+                        <option value="usb">USB</option>
+                        <option value="bluetooth">蓝牙</option>
+                        <option value="wifi">WiFi</option>
+                      </select>
+                    </label>
+
+                    <label class="field" for="kioskPrinterModelInput">
+                      <span>小票机型号</span>
+                      <input
+                        id="kioskPrinterModelInput"
+                        type="text"
+                        maxlength="120"
+                        placeholder="例如：EPSON TM-m30III"
+                      />
+                    </label>
+                  </div>
+
+                  <label class="field" for="kioskPrinterNotesInput">
+                    <span>小票机备注</span>
+                    <textarea
+                      id="kioskPrinterNotesInput"
+                      maxlength="1000"
+                      placeholder="补充打印机安装、驱动、配对方式或异常说明"
+                    ></textarea>
+                  </label>
+
+                  <div class="field-grid">
+                    <label class="field" for="kioskPlatformSelect">
+                      <span>Kiosk 平台</span>
+                      <select id="kioskPlatformSelect">
+                        <option value="">未设置</option>
+                        <option value="Windows">Windows</option>
+                        <option value="Android">Android</option>
+                        <option value="iOS">iOS</option>
+                        <option value="other">其他</option>
+                      </select>
+                      <input
+                        id="kioskPlatformInput"
+                        type="text"
+                        maxlength="80"
+                        placeholder="输入自定义 Kiosk 平台"
+                        hidden
+                      />
+                    </label>
+
+                    <label class="field" for="kioskRemotePlatformSelect">
+                      <span>远控平台</span>
+                      <select id="kioskRemotePlatformSelect">
+                        <option value="">未设置</option>
+                        <option value="Anydesk">Anydesk</option>
+                        <option value="Todesk">Todesk</option>
+                        <option value="Rustdesk">Rustdesk</option>
+                        <option value="向日葵">向日葵</option>
+                        <option value="TeamViewer">TeamViewer</option>
+                        <option value="other">其他</option>
+                      </select>
+                      <input
+                        id="kioskRemotePlatformInput"
+                        type="text"
+                        maxlength="80"
+                        placeholder="输入自定义远控平台"
+                        hidden
+                      />
+                    </label>
+                  </div>
+
+                  <div class="field-grid">
+                    <label class="field" for="kioskActiveAppSelect">
+                      <span>正在使用 App</span>
+                      <select id="kioskActiveAppSelect">
+                        <option value="">未关联 App</option>
+                      </select>
+                    </label>
+
+                    <label class="field" for="kioskActiveVersionSelect">
+                      <span>正在使用版本</span>
+                      <select id="kioskActiveVersionSelect">
+                        <option value="">未关联版本</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <label class="field" for="kioskRemoteCodeInput">
+                    <span>远控码</span>
+                    <input
+                      id="kioskRemoteCodeInput"
+                      type="text"
+                      maxlength="120"
+                      placeholder="输入远控码或设备识别码"
+                    />
+                  </label>
+
+                  <label class="field" for="kioskNotesInput">
+                    <span>备注</span>
+                    <textarea
+                      id="kioskNotesInput"
+                      maxlength="1500"
+                      placeholder="补充门店交接信息、现场网络情况或其他说明"
+                    ></textarea>
+                  </label>
+
+                  <div class="form-actions">
+                    <button class="primary-button" id="kioskSubmitButton" type="submit">
+                      创建 Kiosk
+                    </button>
+                    <button class="ghost-button" id="kioskResetButton" type="button">
+                      清空表单
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
+
+            <section
+              class="panel panel-section detail-task-list-panel kiosk-list-panel"
+              aria-label="项目 Kiosk 列表"
+            >
+              <div class="section-heading">
+                <div>
+                  <p class="section-kicker">Kiosk List</p>
+                  <h2>Kiosk 列表</h2>
+                </div>
+                <span class="panel-badge" id="projectKioskCountBadge">0 台 Kiosk</span>
+              </div>
+
+              <p class="auth-copy" id="projectKioskMeta">
+                这里会列出当前项目的全部 Kiosk、打印机信息和远控信息。
+              </p>
+
+              <div class="kiosk-list-toolbar">
+                <label class="field compact-field" for="kioskRegionFilterInput">
+                  <span>地区分类</span>
+                  <select id="kioskRegionFilterInput">
+                    <option value="all">全部地区</option>
+                  </select>
+                </label>
+
+                <div class="meta-row" id="projectKioskStats"></div>
+              </div>
+
+              <div class="stacked-list" id="projectKioskList"></div>
+            </section>
+          </section>
+
           <section class="workspace-view" data-view="app-overview" hidden>
             <header class="topbar panel">
               <div>
@@ -884,8 +1209,7 @@
                         id="versionNameInput"
                         type="text"
                         maxlength="60"
-                        placeholder="例如：2.4.0"
-                        required
+                        placeholder="例如：2.4.0；仅资源更新时可留空"
                       />
                     </label>
 
@@ -899,6 +1223,16 @@
                       />
                     </label>
                   </div>
+
+                  <label class="field" for="resourceVersionInput">
+                    <span>资源版本</span>
+                    <input
+                      id="resourceVersionInput"
+                      type="text"
+                      maxlength="80"
+                      placeholder="例如：2026.04.25-assets-3"
+                    />
+                  </label>
 
                   <label class="field" for="versionDescriptionInput">
                     <span>版本说明</span>
@@ -1014,7 +1348,17 @@
                   <input
                     id="versionSearchInput"
                     type="search"
-                    placeholder="按版本号、构建号、负责人、说明或备注搜索"
+                    placeholder="按版本号、构建号、资源版本、负责人、说明或备注搜索"
+                  />
+                </label>
+
+                <label class="field" for="versionBundleIdDisplayInput">
+                  <span>包名 / 标识</span>
+                  <input
+                    id="versionBundleIdDisplayInput"
+                    type="text"
+                    placeholder="当前 App 未设置包名 / 标识"
+                    readonly
                   />
                 </label>
 
@@ -1562,7 +1906,7 @@
             </div>
 
             <p class="auth-copy" id="projectCreateDialogCopy">
-              创建成功后，会自动切换到新项目；任务管理和 App 版本管理都可以直接使用它。
+              创建成功后，会自动切换到新项目；任务管理、日程表和 App 版本管理都可以直接使用它。
             </p>
 
             <form class="task-form" id="projectCreateDialogForm">

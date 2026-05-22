@@ -116,6 +116,7 @@ function initializeSchema() {
       app_id TEXT NOT NULL,
       version_name TEXT NOT NULL,
       build_number TEXT NOT NULL DEFAULT '',
+      resource_version TEXT NOT NULL DEFAULT '',
       description TEXT NOT NULL DEFAULT '',
       notes TEXT NOT NULL DEFAULT '',
       owner TEXT NOT NULL DEFAULT '',
@@ -131,6 +132,25 @@ function initializeSchema() {
       FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS kiosks (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      region TEXT NOT NULL DEFAULT '',
+      location TEXT NOT NULL DEFAULT '',
+      printer_connection TEXT NOT NULL DEFAULT 'usb',
+      printer_model TEXT NOT NULL DEFAULT '',
+      printer_notes TEXT NOT NULL DEFAULT '',
+      kiosk_platform TEXT NOT NULL DEFAULT '',
+      remote_platform TEXT NOT NULL DEFAULT '',
+      remote_code TEXT NOT NULL DEFAULT '',
+      active_app_id TEXT NOT NULL DEFAULT '',
+      active_version_id TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
@@ -140,6 +160,7 @@ function initializeSchema() {
     CREATE INDEX IF NOT EXISTS idx_apps_user_id ON apps(user_id);
     CREATE INDEX IF NOT EXISTS idx_apps_project_id ON apps(project_id);
     CREATE INDEX IF NOT EXISTS idx_app_versions_app_id ON app_versions(app_id);
+    CREATE INDEX IF NOT EXISTS idx_kiosks_project_id ON kiosks(project_id);
   `);
 
   ensureColumn("tasks", "assignee", "TEXT NOT NULL DEFAULT ''");
@@ -147,6 +168,9 @@ function initializeSchema() {
   ensureColumn("tasks", "completed_date", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("tasks", "notes", "TEXT NOT NULL DEFAULT ''");
   ensureColumn("apps", "project_id", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("app_versions", "resource_version", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("kiosks", "active_app_id", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("kiosks", "active_version_id", "TEXT NOT NULL DEFAULT ''");
   migrateLegacyAppsToProjects();
 }
 

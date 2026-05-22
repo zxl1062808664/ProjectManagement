@@ -110,6 +110,21 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(restoredAppResponse.status, 200);
     assert.equal(restoredAppResponse.body.app.archived, false);
 
+    const invalidVersionResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/apps/${createdApp.id}/versions`,
+      {
+        method: "POST",
+        cookie: sessionCookie,
+        body: {
+          description: "缺少版本标识字段",
+        },
+      }
+    );
+
+    assert.equal(invalidVersionResponse.status, 422);
+    assert.equal(invalidVersionResponse.body.error.code, "INVALID_VERSION_IDENTIFIER");
+
     const createdVersionResponse = await request(
       baseUrl,
       `/api/projects/${createdProject.id}/apps/${createdApp.id}/versions`,
@@ -119,6 +134,7 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
         body: {
           versionName: "2.4.0",
           buildNumber: "24015",
+          resourceVersion: "ios-res-24015",
           description: "接入版本管理入口",
           notes: "需要在正式发布前确认审核素材。",
           owner: "Zenith",
@@ -137,6 +153,7 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(createdVersion.owner, "Zenith");
     assert.equal(createdVersion.channel, "gray");
     assert.equal(createdVersion.buildNumber, "24015");
+    assert.equal(createdVersion.resourceVersion, "ios-res-24015");
     assert.equal(createdVersion.publishedDate, "");
 
     const updatedVersionResponse = await request(
@@ -148,6 +165,7 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
         body: {
           status: "done",
           priority: "urgent",
+          resourceVersion: "ios-res-24015-release",
           notes: "已完成审核并正式发布。",
         },
       }
@@ -156,8 +174,62 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(updatedVersionResponse.status, 200);
     assert.equal(updatedVersionResponse.body.version.status, "done");
     assert.equal(updatedVersionResponse.body.version.priority, "urgent");
+    assert.equal(
+      updatedVersionResponse.body.version.resourceVersion,
+      "ios-res-24015-release"
+    );
     assert.equal(updatedVersionResponse.body.version.notes, "已完成审核并正式发布。");
     assert.match(updatedVersionResponse.body.version.publishedDate, /^\d{4}-\d{2}-\d{2}$/);
+
+    const resourceOnlyVersionResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/apps/${createdApp.id}/versions`,
+      {
+        method: "POST",
+        cookie: sessionCookie,
+        body: {
+          resourceVersion: "ios-assets-24015-hotfix",
+          description: "仅更新资源包，不改客户端版本号。",
+          notes: "用于节日活动素材替换。",
+          owner: "Luna",
+          channel: "hotfix",
+          status: "review",
+          priority: "medium",
+          releaseDate: "2026-04-29",
+        },
+      }
+    );
+    const resourceOnlyVersion = resourceOnlyVersionResponse.body.version;
+
+    assert.equal(resourceOnlyVersionResponse.status, 201);
+    assert.equal(resourceOnlyVersion.versionName, "");
+    assert.equal(resourceOnlyVersion.buildNumber, "");
+    assert.equal(resourceOnlyVersion.resourceVersion, "ios-assets-24015-hotfix");
+    assert.equal(resourceOnlyVersion.channel, "hotfix");
+
+    const updatedResourceOnlyVersionResponse = await request(
+      baseUrl,
+      `/api/app-versions/${resourceOnlyVersion.id}`,
+      {
+        method: "PATCH",
+        cookie: sessionCookie,
+        body: {
+          resourceVersion: "ios-assets-24015-hotfix-2",
+          notes: "仅替换资源包并保留同一发布批次。",
+        },
+      }
+    );
+
+    assert.equal(updatedResourceOnlyVersionResponse.status, 200);
+    assert.equal(updatedResourceOnlyVersionResponse.body.version.versionName, "");
+    assert.equal(
+      updatedResourceOnlyVersionResponse.body.version.resourceVersion,
+      "ios-assets-24015-hotfix-2"
+    );
+    assert.equal(
+      updatedResourceOnlyVersionResponse.body.version.notes,
+      "仅替换资源包并保留同一发布批次。"
+    );
 
     const secondVersionResponse = await request(
       baseUrl,
@@ -168,6 +240,7 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
         body: {
           versionName: "2.5.0",
           buildNumber: "25003",
+          resourceVersion: "ios-res-25003-beta",
           description: "准备 beta 验证版本",
           owner: "Mika",
           channel: "beta",
@@ -182,6 +255,7 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(secondVersionResponse.status, 201);
     assert.equal(secondVersion.versionName, "2.5.0");
     assert.equal(secondVersion.channel, "beta");
+    assert.equal(secondVersion.resourceVersion, "ios-res-25003-beta");
 
     const bulkUpdateResponse = await request(
       baseUrl,
@@ -212,10 +286,10 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
 
     assert.equal(overviewResponse.status, 200);
     assert.equal(overviewResponse.body.totals.appCount, 1);
-    assert.equal(overviewResponse.body.totals.versionCount, 2);
-    assert.equal(overviewResponse.body.totals.reviewCount, 2);
+    assert.equal(overviewResponse.body.totals.versionCount, 3);
+    assert.equal(overviewResponse.body.totals.reviewCount, 3);
     assert.equal(overviewResponse.body.project.id, createdProject.id);
-    assert.equal(overviewResponse.body.apps[0].recentVersions.length, 2);
+    assert.equal(overviewResponse.body.apps[0].recentVersions.length, 3);
 
     const boardResponse = await request(
       baseUrl,
@@ -228,9 +302,16 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(boardResponse.status, 200);
     assert.equal(boardResponse.body.project.id, createdProject.id);
     assert.equal(boardResponse.body.app.id, createdApp.id);
-    assert.equal(boardResponse.body.versions.length, 2);
+    assert.equal(boardResponse.body.versions.length, 3);
     assert.equal(boardResponse.body.versions[0].channel, "gray");
     assert.equal(boardResponse.body.versions[0].owner, "Zenith");
+    assert.equal(boardResponse.body.versions[0].resourceVersion, "ios-res-24015-release");
+    const resourceOnlyVersionInBoard = boardResponse.body.versions.find(
+      (version) => version.id === resourceOnlyVersion.id
+    );
+    assert.ok(resourceOnlyVersionInBoard);
+    assert.equal(resourceOnlyVersionInBoard.versionName, "");
+    assert.equal(resourceOnlyVersionInBoard.resourceVersion, "ios-assets-24015-hotfix-2");
 
     const exportResponse = await request(
       baseUrl,
@@ -245,8 +326,14 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(exportPayload.scope, "app");
     assert.equal(exportPayload.project.name, "移动发布项目");
     assert.equal(exportPayload.app.name, "Task Atlas iOS");
-    assert.equal(exportPayload.versions.length, 2);
+    assert.equal(exportPayload.versions.length, 3);
     assert.equal(exportPayload.versions[0].buildNumber, "24015");
+    assert.equal(exportPayload.versions[0].resourceVersion, "ios-res-24015-release");
+    const resourceOnlyExport = exportPayload.versions.find(
+      (version) => version.resourceVersion === "ios-assets-24015-hotfix-2"
+    );
+    assert.ok(resourceOnlyExport);
+    assert.equal(resourceOnlyExport.versionName, "");
 
     const importedAppResponse = await request(baseUrl, "/api/apps/import/json", {
       method: "POST",
@@ -270,8 +357,17 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     );
 
     assert.equal(importedStandaloneBoardResponse.status, 200);
-    assert.equal(importedStandaloneBoardResponse.body.versions.length, 2);
+    assert.equal(importedStandaloneBoardResponse.body.versions.length, 3);
     assert.equal(importedStandaloneBoardResponse.body.versions[0].buildNumber, "24015");
+    assert.equal(
+      importedStandaloneBoardResponse.body.versions[0].resourceVersion,
+      "ios-res-24015-release"
+    );
+    const importedResourceOnlyVersion = importedStandaloneBoardResponse.body.versions.find(
+      (version) => version.resourceVersion === "ios-assets-24015-hotfix-2"
+    );
+    assert.ok(importedResourceOnlyVersion);
+    assert.equal(importedResourceOnlyVersion.versionName, "");
 
     const workspaceImportResponse = await request(baseUrl, "/api/apps/import/json", {
       method: "POST",
@@ -302,6 +398,7 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
                   {
                     versionName: "1.9.0",
                     buildNumber: "19003",
+                    resourceVersion: "web-assets-19003",
                     description: "导入的版本记录",
                     notes: "补齐发布日志入口。",
                     owner: "Ava",
@@ -309,6 +406,14 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
                     status: "doing",
                     priority: "medium",
                     releaseDate: "2026-05-03",
+                  },
+                  {
+                    versionName: "",
+                    resourceVersion: "web-assets-hotfix-1",
+                    description: "仅资源版本热更新记录",
+                    channel: "hotfix",
+                    status: "review",
+                    priority: "high",
                   },
                 ],
               },
@@ -335,8 +440,14 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(importedBoardResponse.status, 200);
     assert.equal(importedBoardResponse.body.project.name, "Web 发布项目");
     assert.equal(importedBoardResponse.body.app.platform, "web");
-    assert.equal(importedBoardResponse.body.versions.length, 1);
+    assert.equal(importedBoardResponse.body.versions.length, 2);
     assert.equal(importedBoardResponse.body.versions[0].notes, "补齐发布日志入口。");
+    assert.equal(importedBoardResponse.body.versions[0].resourceVersion, "web-assets-19003");
+    const importedWorkspaceResourceOnlyVersion = importedBoardResponse.body.versions.find(
+      (version) => version.resourceVersion === "web-assets-hotfix-1"
+    );
+    assert.ok(importedWorkspaceResourceOnlyVersion);
+    assert.equal(importedWorkspaceResourceOnlyVersion.versionName, "");
 
     const deleteVersionResponse = await request(
       baseUrl,

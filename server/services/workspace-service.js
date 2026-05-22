@@ -10,6 +10,7 @@ const {
 
 const VALID_STATUSES = new Set(["todo", "doing", "review", "done"]);
 const VALID_PRIORITIES = new Set(["low", "medium", "high", "urgent"]);
+const VALID_PRINTER_CONNECTIONS = new Set(["usb", "bluetooth", "wifi"]);
 
 const selectProjectsByUserStatement = db.prepare(`
   SELECT id, user_id, name, description, color, archived, created_at, updated_at
@@ -230,6 +231,132 @@ const clearCompletedTasksByProjectStatement = db.prepare(`
   WHERE project_id = ? AND status = 'done'
 `);
 
+const selectKiosksByProjectStatement = db.prepare(`
+  SELECT
+    kiosks.id,
+    kiosks.project_id,
+    kiosks.region,
+    kiosks.location,
+    kiosks.printer_connection,
+    kiosks.printer_model,
+    kiosks.printer_notes,
+    kiosks.kiosk_platform,
+    kiosks.remote_platform,
+    kiosks.remote_code,
+    kiosks.active_app_id,
+    kiosks.active_version_id,
+    apps.name AS active_app_name,
+    app_versions.version_name AS active_version_name,
+    app_versions.build_number AS active_build_number,
+    app_versions.resource_version AS active_resource_version,
+    app_versions.updated_at AS active_version_updated_at,
+    kiosks.notes,
+    kiosks.created_at,
+    kiosks.updated_at
+  FROM kiosks
+  LEFT JOIN apps
+    ON apps.id = kiosks.active_app_id
+    AND apps.project_id = kiosks.project_id
+  LEFT JOIN app_versions
+    ON app_versions.id = kiosks.active_version_id
+    AND app_versions.app_id = apps.id
+  WHERE kiosks.project_id = ?
+  ORDER BY kiosks.updated_at DESC, kiosks.created_at DESC
+`);
+
+const selectKioskByIdForUserStatement = db.prepare(`
+  SELECT
+    kiosks.id,
+    kiosks.project_id,
+    kiosks.region,
+    kiosks.location,
+    kiosks.printer_connection,
+    kiosks.printer_model,
+    kiosks.printer_notes,
+    kiosks.kiosk_platform,
+    kiosks.remote_platform,
+    kiosks.remote_code,
+    kiosks.active_app_id,
+    kiosks.active_version_id,
+    apps.name AS active_app_name,
+    app_versions.version_name AS active_version_name,
+    app_versions.build_number AS active_build_number,
+    app_versions.resource_version AS active_resource_version,
+    app_versions.updated_at AS active_version_updated_at,
+    kiosks.notes,
+    kiosks.created_at,
+    kiosks.updated_at
+  FROM kiosks
+  JOIN projects ON projects.id = kiosks.project_id
+  LEFT JOIN apps
+    ON apps.id = kiosks.active_app_id
+    AND apps.project_id = kiosks.project_id
+  LEFT JOIN app_versions
+    ON app_versions.id = kiosks.active_version_id
+    AND app_versions.app_id = apps.id
+  WHERE kiosks.id = ? AND projects.user_id = ?
+`);
+
+const selectAppByIdForProjectStatement = db.prepare(`
+  SELECT id
+  FROM apps
+  WHERE id = ? AND user_id = ? AND project_id = ?
+`);
+
+const selectVersionByIdForAppStatement = db.prepare(`
+  SELECT app_versions.id
+  FROM app_versions
+  JOIN apps ON apps.id = app_versions.app_id
+  WHERE app_versions.id = ?
+    AND apps.id = ?
+    AND apps.user_id = ?
+    AND apps.project_id = ?
+`);
+
+const insertKioskStatement = db.prepare(`
+  INSERT INTO kiosks (
+    id,
+    project_id,
+    region,
+    location,
+    printer_connection,
+    printer_model,
+    printer_notes,
+    kiosk_platform,
+    remote_platform,
+    remote_code,
+    active_app_id,
+    active_version_id,
+    notes,
+    created_at,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+
+const updateKioskStatement = db.prepare(`
+  UPDATE kiosks
+  SET
+    region = ?,
+    location = ?,
+    printer_connection = ?,
+    printer_model = ?,
+    printer_notes = ?,
+    kiosk_platform = ?,
+    remote_platform = ?,
+    remote_code = ?,
+    active_app_id = ?,
+    active_version_id = ?,
+    notes = ?,
+    updated_at = ?
+  WHERE id = ?
+`);
+
+const deleteKioskStatement = db.prepare(`
+  DELETE FROM kiosks
+  WHERE id = ?
+`);
+
 function listProjectsForUser(userId) {
   return selectProjectsByUserStatement.all(userId).map(mapProject);
 }
@@ -239,10 +366,12 @@ function getWorkspaceOverview(userId) {
   const totals = createEmptyStatusSummary();
   totals.appCount = 0;
   totals.versionCount = 0;
+  totals.kioskCount = 0;
 
   const projectSummaries = projects.map((project) => {
     const tasks = listTasksByProject(project.id);
     const apps = listAppsByProject(userId, project.id);
+    const kiosks = listKiosksByProject(project.id);
     const statusSummary = summarizeTasks(tasks);
     const versionCount = apps.reduce(
       (count, app) => count + listAppVersionCount(app.id),
@@ -256,12 +385,14 @@ function getWorkspaceOverview(userId) {
     totals.doneCount += statusSummary.doneCount;
     totals.appCount += apps.length;
     totals.versionCount += versionCount;
+    totals.kioskCount += kiosks.length;
 
     return {
       ...project,
       ...statusSummary,
       appCount: apps.length,
       versionCount,
+      kioskCount: kiosks.length,
       recentTasks: [...tasks]
         .sort((left, right) => toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt))
         .slice(0, 3)
@@ -297,6 +428,7 @@ function getBoardForProject(userId, projectId) {
       project: null,
       tags: [],
       tasks: [],
+      kiosks: [],
     };
   }
 
@@ -305,6 +437,7 @@ function getBoardForProject(userId, projectId) {
     project: selectedProject,
     tags: listTagsByProject(selectedProject.id),
     tasks: listTasksByProject(selectedProject.id),
+    kiosks: listKiosksByProject(selectedProject.id),
   };
 }
 
@@ -375,6 +508,95 @@ function deleteProject(userId, projectId) {
   getProjectOrThrow(userId, projectId);
   deleteAppsByProject(userId, projectId);
   deleteProjectStatement.run(projectId, userId);
+}
+
+function createKiosk(userId, projectId, payload = {}) {
+  const project = getProjectOrThrow(userId, projectId);
+  const normalizedKiosk = normalizeKioskInput(payload);
+  const usage = normalizeKioskUsageInput(userId, project.id, payload);
+  const now = new Date().toISOString();
+  const kioskId = createId();
+
+  insertKioskStatement.run(
+    kioskId,
+    project.id,
+    normalizedKiosk.region,
+    normalizedKiosk.location,
+    normalizedKiosk.printerConnection,
+    normalizedKiosk.printerModel,
+    normalizedKiosk.printerNotes,
+    normalizedKiosk.kioskPlatform,
+    normalizedKiosk.remotePlatform,
+    normalizedKiosk.remoteCode,
+    usage.activeAppId,
+    usage.activeVersionId,
+    normalizedKiosk.notes,
+    now,
+    now
+  );
+
+  return getKioskOrThrow(userId, kioskId);
+}
+
+function updateKiosk(userId, kioskId, payload = {}) {
+  const currentKiosk = getKioskOrThrow(userId, kioskId);
+  const normalizedKiosk = normalizeKioskInput({
+    region: payload.region === undefined ? currentKiosk.region : payload.region,
+    location: payload.location === undefined ? currentKiosk.location : payload.location,
+    printerConnection:
+      payload.printerConnection === undefined
+        ? currentKiosk.printerConnection
+        : payload.printerConnection,
+    printerModel:
+      payload.printerModel === undefined
+        ? currentKiosk.printerModel
+        : payload.printerModel,
+    printerNotes:
+      payload.printerNotes === undefined
+        ? currentKiosk.printerNotes
+        : payload.printerNotes,
+    kioskPlatform:
+      payload.kioskPlatform === undefined
+        ? currentKiosk.kioskPlatform
+        : payload.kioskPlatform,
+    remotePlatform:
+      payload.remotePlatform === undefined
+        ? currentKiosk.remotePlatform
+        : payload.remotePlatform,
+    remoteCode:
+      payload.remoteCode === undefined ? currentKiosk.remoteCode : payload.remoteCode,
+    notes: payload.notes === undefined ? currentKiosk.notes : payload.notes,
+  });
+  const usage = normalizeKioskUsageInput(
+    userId,
+    currentKiosk.projectId,
+    payload,
+    currentKiosk
+  );
+  const updatedAt = new Date().toISOString();
+
+  updateKioskStatement.run(
+    normalizedKiosk.region,
+    normalizedKiosk.location,
+    normalizedKiosk.printerConnection,
+    normalizedKiosk.printerModel,
+    normalizedKiosk.printerNotes,
+    normalizedKiosk.kioskPlatform,
+    normalizedKiosk.remotePlatform,
+    normalizedKiosk.remoteCode,
+    usage.activeAppId,
+    usage.activeVersionId,
+    normalizedKiosk.notes,
+    updatedAt,
+    kioskId
+  );
+
+  return getKioskOrThrow(userId, kioskId);
+}
+
+function deleteKiosk(userId, kioskId) {
+  getKioskOrThrow(userId, kioskId);
+  deleteKioskStatement.run(kioskId);
 }
 
 function createTag(userId, projectId, payload = {}) {
@@ -576,6 +798,17 @@ function exportProject(userId, projectId) {
       name: tag.name,
       color: tag.color,
     })),
+    kiosks: board.kiosks.map((kiosk) => ({
+      region: kiosk.region,
+      location: kiosk.location,
+      printerConnection: kiosk.printerConnection,
+      printerModel: kiosk.printerModel,
+      printerNotes: kiosk.printerNotes,
+      kioskPlatform: kiosk.kioskPlatform,
+      remotePlatform: kiosk.remotePlatform,
+      remoteCode: kiosk.remoteCode,
+      notes: kiosk.notes,
+    })),
     tasks: board.tasks.map((task) => ({
       title: task.title,
       description: task.description,
@@ -617,6 +850,13 @@ function importData(userId, payload = {}) {
             0
           )
         : 0;
+      const importedKioskCount = Array.isArray(payload.projects)
+        ? payload.projects.reduce(
+            (count, projectPayload) =>
+              count + (Array.isArray(projectPayload.kiosks) ? projectPayload.kiosks.length : 0),
+            0
+          )
+        : 0;
 
       if (Array.isArray(payload.apps) && payload.apps.length) {
         importedProjects.push(importLegacyStandaloneAppsProject(userId, payload.apps));
@@ -627,6 +867,7 @@ function importData(userId, payload = {}) {
         importedProjects,
         importedCount: importedProjects.length,
         importedAppCount,
+        importedKioskCount,
       };
     }
 
@@ -636,6 +877,7 @@ function importData(userId, payload = {}) {
         importedProjects: [importedProject],
         importedCount: 1,
         importedAppCount: Array.isArray(payload.apps) ? payload.apps.length : 0,
+        importedKioskCount: Array.isArray(payload.kiosks) ? payload.kiosks.length : 0,
       };
     }
 
@@ -646,6 +888,7 @@ function importData(userId, payload = {}) {
 function importProjectPayload(userId, payload) {
   const projectData = payload.project || payload;
   const tags = Array.isArray(payload.tags) ? payload.tags : [];
+  const kiosks = Array.isArray(payload.kiosks) ? payload.kiosks : [];
   const tasks = Array.isArray(payload.tasks) ? payload.tasks : [];
   const apps = Array.isArray(payload.apps) ? payload.apps : [];
 
@@ -660,6 +903,10 @@ function importProjectPayload(userId, payload) {
   tags.forEach((tag) => {
     const createdTag = createTag(userId, createdProject.id, tag);
     tagIdByName.set(createdTag.name, createdTag.id);
+  });
+
+  kiosks.forEach((kiosk) => {
+    createKiosk(userId, createdProject.id, kiosk);
   });
 
   tasks.forEach((task) => {
@@ -705,6 +952,10 @@ function importLegacyStandaloneAppsProject(userId, apps) {
 
 function listTagsByProject(projectId) {
   return selectTagsByProjectStatement.all(projectId).map(mapTag);
+}
+
+function listKiosksByProject(projectId) {
+  return selectKiosksByProjectStatement.all(projectId).map(mapKioskRow);
 }
 
 function listTasksByProject(projectId) {
@@ -780,6 +1031,15 @@ function getTaskOrThrow(userId, taskId) {
   task.tagIds = listTaskTagIds(task.id);
   task.subtasks = listSubtasksByTask(task.id);
   return task;
+}
+
+function getKioskOrThrow(userId, kioskId) {
+  const row = selectKioskByIdForUserStatement.get(kioskId, userId);
+  if (!row) {
+    throw createHttpError(404, "KIOSK_NOT_FOUND", "Kiosk 不存在");
+  }
+
+  return mapKioskRow(row);
 }
 
 function getTagOrThrow(userId, tagId) {
@@ -930,6 +1190,84 @@ function normalizeTagIds(projectId, tagIds) {
   });
 
   return uniqueTagIds;
+}
+
+function normalizeKioskInput(payload = {}) {
+  return {
+    region: normalizeText(payload.region, 80, {
+      required: true,
+      errorCode: "INVALID_KIOSK_REGION",
+    }),
+    location: normalizeText(payload.location, 160, {
+      required: true,
+      errorCode: "INVALID_KIOSK_LOCATION",
+    }),
+    printerConnection: normalizeEnum(
+      payload.printerConnection,
+      VALID_PRINTER_CONNECTIONS,
+      "usb",
+      "INVALID_PRINTER_CONNECTION"
+    ),
+    printerModel: normalizeText(payload.printerModel, 120),
+    printerNotes: normalizeText(payload.printerNotes, 1000),
+    kioskPlatform: normalizeText(payload.kioskPlatform, 80),
+    remotePlatform: normalizeText(payload.remotePlatform, 80),
+    remoteCode: normalizeText(payload.remoteCode, 120),
+    notes: normalizeText(payload.notes, 1500),
+  };
+}
+
+function normalizeKioskUsageInput(userId, projectId, payload = {}, currentKiosk = null) {
+  const hasAppId = Object.prototype.hasOwnProperty.call(payload, "activeAppId");
+  const hasVersionId = Object.prototype.hasOwnProperty.call(payload, "activeVersionId");
+  const activeAppId = hasAppId
+    ? normalizeText(payload.activeAppId, 80)
+    : currentKiosk?.activeAppId || "";
+  let activeVersionId = hasVersionId
+    ? normalizeText(payload.activeVersionId, 80)
+    : currentKiosk?.activeVersionId || "";
+
+  if (hasAppId && currentKiosk?.activeAppId !== activeAppId && !hasVersionId) {
+    activeVersionId = "";
+  }
+
+  if (!activeAppId) {
+    return {
+      activeAppId: "",
+      activeVersionId: "",
+    };
+  }
+
+  const app = selectAppByIdForProjectStatement.get(activeAppId, userId, projectId);
+  if (!app) {
+    throw createHttpError(422, "INVALID_KIOSK_ACTIVE_APP", "Kiosk 关联的 App 不属于当前项目");
+  }
+
+  if (!activeVersionId) {
+    return {
+      activeAppId,
+      activeVersionId: "",
+    };
+  }
+
+  const version = selectVersionByIdForAppStatement.get(
+    activeVersionId,
+    activeAppId,
+    userId,
+    projectId
+  );
+  if (!version) {
+    throw createHttpError(
+      422,
+      "INVALID_KIOSK_ACTIVE_VERSION",
+      "Kiosk 关联的版本不属于当前 App"
+    );
+  }
+
+  return {
+    activeAppId,
+    activeVersionId,
+  };
 }
 
 function normalizeSubtasks(subtasks) {
@@ -1158,6 +1496,31 @@ function mapSubtask(row) {
   };
 }
 
+function mapKioskRow(row) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    region: row.region,
+    location: row.location,
+    printerConnection: row.printer_connection,
+    printerModel: row.printer_model,
+    printerNotes: row.printer_notes,
+    kioskPlatform: row.kiosk_platform,
+    remotePlatform: row.remote_platform,
+    remoteCode: row.remote_code,
+    activeAppId: row.active_app_id || "",
+    activeVersionId: row.active_version_id || "",
+    activeAppName: row.active_app_name || "",
+    activeVersionName: row.active_version_name || "",
+    activeBuildNumber: row.active_build_number || "",
+    activeResourceVersion: row.active_resource_version || "",
+    activeVersionUpdatedAt: row.active_version_updated_at || "",
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function createId() {
   return crypto.randomUUID();
 }
@@ -1185,9 +1548,11 @@ function createHttpError(status, code, message) {
 module.exports = {
   bulkUpdateTasks,
   clearCompletedTasks,
+  createKiosk,
   createProject,
   createTag,
   createTask,
+  deleteKiosk,
   deleteProject,
   deleteTag,
   deleteTask,
@@ -1195,7 +1560,9 @@ module.exports = {
   getBoardForProject,
   getWorkspaceOverview,
   importData,
+  listKiosksByProject,
   listProjectsForUser,
+  updateKiosk,
   updateProject,
   updateSubtask,
   updateTag,

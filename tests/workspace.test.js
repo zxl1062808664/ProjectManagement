@@ -82,6 +82,47 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(restoredProjectResponse.status, 200);
     assert.equal(restoredProjectResponse.body.project.archived, false);
 
+    const createdKioskResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/kiosks`,
+      {
+        method: "POST",
+        cookie: sessionCookie,
+        body: {
+          region: "华东 / 上海",
+          location: "虹桥门店一层入口",
+          printerConnection: "usb",
+          printerModel: "EPSON TM-m30III",
+          printerNotes: "驱动已预装，默认直连。",
+          kioskPlatform: "Windows 11",
+          remotePlatform: "向日葵",
+          remoteCode: "SH-HQ-01",
+          notes: "现场网络走商场专线。",
+        },
+      }
+    );
+    const createdKiosk = createdKioskResponse.body.kiosk;
+
+    assert.equal(createdKioskResponse.status, 201);
+    assert.equal(createdKiosk.projectId, createdProject.id);
+    assert.equal(createdKiosk.location, "虹桥门店一层入口");
+    assert.equal(createdKiosk.printerConnection, "usb");
+
+    const updatedKioskResponse = await request(baseUrl, `/api/kiosks/${createdKiosk.id}`, {
+      method: "PATCH",
+      cookie: sessionCookie,
+      body: {
+        printerConnection: "wifi",
+        remoteCode: "SH-HQ-01-WIFI",
+        notes: "现场网络已切到门店 WiFi。",
+      },
+    });
+
+    assert.equal(updatedKioskResponse.status, 200);
+    assert.equal(updatedKioskResponse.body.kiosk.printerConnection, "wifi");
+    assert.equal(updatedKioskResponse.body.kiosk.remoteCode, "SH-HQ-01-WIFI");
+    assert.equal(updatedKioskResponse.body.kiosk.notes, "现场网络已切到门店 WiFi。");
+
     const createdTagResponse = await request(
       baseUrl,
       `/api/projects/${createdProject.id}/tags`,
@@ -264,6 +305,34 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(createdVersionResponse.status, 201);
     assert.equal(createdVersionResponse.body.version.projectId, createdProject.id);
     assert.equal(createdVersionResponse.body.version.versionName, "1.2.0");
+    const createdVersion = createdVersionResponse.body.version;
+
+    const usageKioskResponse = await request(baseUrl, `/api/kiosks/${createdKiosk.id}`, {
+      method: "PATCH",
+      cookie: sessionCookie,
+      body: {
+        activeAppId: createdApp.id,
+        activeVersionId: createdVersion.id,
+      },
+    });
+
+    assert.equal(usageKioskResponse.status, 200);
+    assert.equal(usageKioskResponse.body.kiosk.activeAppId, createdApp.id);
+    assert.equal(usageKioskResponse.body.kiosk.activeVersionId, createdVersion.id);
+    assert.equal(usageKioskResponse.body.kiosk.activeAppName, createdApp.name);
+    assert.equal(usageKioskResponse.body.kiosk.activeVersionName, "1.2.0");
+
+    const projectVersionsResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/apps/versions`,
+      {
+        cookie: sessionCookie,
+      }
+    );
+
+    assert.equal(projectVersionsResponse.status, 200);
+    assert.equal(projectVersionsResponse.body.versions.length, 1);
+    assert.equal(projectVersionsResponse.body.versions[0].id, createdVersion.id);
 
     const overviewResponse = await request(baseUrl, "/api/projects/overview", {
       cookie: sessionCookie,
@@ -274,6 +343,7 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(overviewResponse.body.totals.taskCount, 2);
     assert.equal(overviewResponse.body.totals.appCount, 1);
     assert.equal(overviewResponse.body.totals.versionCount, 1);
+    assert.equal(overviewResponse.body.totals.kioskCount, 1);
     assert.equal(overviewResponse.body.totals.doneCount, 2);
     const createdProjectSummary = overviewResponse.body.projects.find(
       (project) => project.id === createdProject.id
@@ -281,6 +351,7 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(createdProjectSummary.recentTasks.length, 2);
     assert.equal(createdProjectSummary.appCount, 1);
     assert.equal(createdProjectSummary.versionCount, 1);
+    assert.equal(createdProjectSummary.kioskCount, 1);
 
     const boardResponse = await request(
       baseUrl,
@@ -293,6 +364,11 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(boardResponse.status, 200);
     assert.equal(boardResponse.body.project.id, createdProject.id);
     assert.equal(boardResponse.body.tags.length, 1);
+    assert.equal(boardResponse.body.kiosks.length, 1);
+    assert.equal(boardResponse.body.kiosks[0].printerConnection, "wifi");
+    assert.equal(boardResponse.body.kiosks[0].remoteCode, "SH-HQ-01-WIFI");
+    assert.equal(boardResponse.body.kiosks[0].activeAppName, createdApp.name);
+    assert.equal(boardResponse.body.kiosks[0].activeVersionName, "1.2.0");
     assert.equal(boardResponse.body.tasks.length, 2);
     assert.equal(boardResponse.body.tasks[0].status, "done");
     assert.equal(boardResponse.body.tasks[0].assignee, "Zenith");
@@ -312,6 +388,9 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(exportPayload.scope, "project");
     assert.equal(exportPayload.project.name, "官网改版");
     assert.equal(exportPayload.tags[0].name, "前端联调");
+    assert.equal(exportPayload.kiosks.length, 1);
+    assert.equal(exportPayload.kiosks[0].location, "虹桥门店一层入口");
+    assert.equal(exportPayload.kiosks[0].printerConnection, "wifi");
     const exportedTask = exportPayload.tasks.find((task) => task.title === "补齐埋点校验");
     assert.equal(exportedTask.assignee, "Zenith");
     assert.equal(exportedTask.notes, "埋点字段已确认，待补回归截图。");
@@ -351,6 +430,7 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(importedProjectResponse.status, 201);
     assert.equal(importedProjectResponse.body.importedCount, 1);
     assert.equal(importedProjectResponse.body.importedAppCount, 1);
+    assert.equal(importedProjectResponse.body.importedKioskCount, 1);
 
     const workspaceImportResponse = await request(baseUrl, "/api/import/json", {
       method: "POST",
@@ -368,6 +448,19 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
               archived: false,
             },
             tags: [{ name: "文档", color: "#245a73" }],
+            kiosks: [
+              {
+                region: "华南 / 深圳",
+                location: "福田门店二层",
+                printerConnection: "bluetooth",
+                printerModel: "SUNMI V2",
+                printerNotes: "蓝牙配对后需要手动切回默认打印机。",
+                kioskPlatform: "Android",
+                remotePlatform: "TeamViewer",
+                remoteCode: "SZ-FT-02",
+                notes: "导入时同时补齐 Kiosk 数据。",
+              },
+            ],
             tasks: [
               {
                 title: "编写交付说明",
@@ -411,6 +504,7 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(workspaceImportResponse.status, 201);
     assert.equal(workspaceImportResponse.body.importedCount, 1);
     assert.equal(workspaceImportResponse.body.importedAppCount, 1);
+    assert.equal(workspaceImportResponse.body.importedKioskCount, 1);
 
     const importedWorkspaceProjectId =
       workspaceImportResponse.body.importedProjects[0].id;
@@ -425,6 +519,9 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
 
     assert.equal(importedBoardResponse.status, 200);
     assert.equal(importedBoardResponse.body.tags.length, 1);
+    assert.equal(importedBoardResponse.body.kiosks.length, 1);
+    assert.equal(importedBoardResponse.body.kiosks[0].printerConnection, "bluetooth");
+    assert.equal(importedBoardResponse.body.kiosks[0].remotePlatform, "TeamViewer");
     assert.equal(importedBoardResponse.body.tags[0].name, "文档");
     assert.equal(importedBoardResponse.body.tasks.length, 1);
     assert.equal(importedBoardResponse.body.tasks[0].subtasks.length, 1);
@@ -453,6 +550,16 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(importedAppBoardResponse.status, 200);
     assert.equal(importedAppBoardResponse.body.versions.length, 1);
     assert.equal(importedAppBoardResponse.body.versions[0].versionName, "0.9.0");
+
+    const deleteImportedKioskResponse = await request(
+      baseUrl,
+      `/api/kiosks/${importedBoardResponse.body.kiosks[0].id}`,
+      {
+        method: "DELETE",
+        cookie: sessionCookie,
+      }
+    );
+    assert.equal(deleteImportedKioskResponse.status, 204);
 
     const deleteTaskResponse = await request(
       baseUrl,

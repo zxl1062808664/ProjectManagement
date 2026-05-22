@@ -12,6 +12,7 @@ const {
   getBoardForApp,
   importAppData,
   listAppsByProject,
+  listVersionsByProject,
   updateApp,
   updateVersion,
 } = require("../services/app-version-service");
@@ -28,6 +29,12 @@ router.get("/projects/:projectId/apps", (req, res) => {
 
 router.get("/projects/:projectId/apps/overview", (req, res) => {
   res.json(getAppOverview(req.auth.user.id, req.params.projectId));
+});
+
+router.get("/projects/:projectId/apps/versions", (req, res) => {
+  res.json({
+    versions: listVersionsByProject(req.auth.user.id, req.params.projectId),
+  });
 });
 
 router.post("/apps/import/json", (req, res) => {
