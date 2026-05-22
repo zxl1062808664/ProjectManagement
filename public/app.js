@@ -1,6 +1,7 @@
 const LEGACY_STORAGE_KEY = "task-atlas-data-v1";
 const GUEST_WORKSPACE_KEY = "task-atlas-workspace-v2";
 const THEME_STORAGE_KEY = "task-atlas-theme-v1";
+const SCHEDULE_ALL_PROJECTS_VALUE = "__all_projects__";
 
 const STATUS_ORDER = ["todo", "doing", "review", "done"];
 const STATUS_META = {
@@ -135,6 +136,7 @@ const state = {
   guestWorkspace: loadGuestWorkspace(),
   workspace: createEmptyWorkspaceView("guest"),
   appWorkspace: createEmptyAppWorkspaceView("guest"),
+  scheduleAllProjects: createEmptyScheduleAllProjectsView(),
   ui: {
     themeMode: loadThemeMode(),
     activeTool: "overview",
@@ -158,6 +160,7 @@ const state = {
     detailSearch: "",
     detailStatusFilter: "all",
     detailTagFilter: "all",
+    scheduleProjectFilter: "",
     taskCalendarMonth: getCalendarMonthKey(todayString()),
     taskCalendarSelectedDate: todayString(),
     appFormMode: "edit",
@@ -681,15 +684,24 @@ async function handleDetailProjectSelectionChange(event) {
 }
 
 async function handleScheduleProjectSelectionChange(event) {
-  const selectedProjectId = event.target.value;
-  if (!selectedProjectId) {
+  const selectedValue = event.target.value;
+  if (!selectedValue) {
+    return;
+  }
+
+  if (selectedValue === SCHEDULE_ALL_PROJECTS_VALUE) {
+    state.ui.scheduleProjectFilter = SCHEDULE_ALL_PROJECTS_VALUE;
+    state.ui.editingTaskId = null;
+    renderSchedule();
+    await loadCloudScheduleAllProjects();
     return;
   }
 
   state.ui.projectFormMode = "edit";
-  state.ui.editingProjectId = selectedProjectId;
+  state.ui.scheduleProjectFilter = selectedValue;
+  state.ui.editingProjectId = selectedValue;
   state.ui.editingTaskId = null;
-  await setCurrentProject(selectedProjectId, { nextTool: "schedule" });
+  await setCurrentProject(selectedValue, { nextTool: "schedule" });
 }
 
 async function handleKioskProjectSelectionChange(event) {
@@ -920,6 +932,9 @@ async function setCurrentProject(projectId, options = {}) {
   }
 
   if (projectId && projectId !== previousProjectId) {
+    if (state.ui.scheduleProjectFilter !== SCHEDULE_ALL_PROJECTS_VALUE) {
+      state.ui.scheduleProjectFilter = projectId;
+    }
     state.ui.editingTagId = null;
     state.ui.editingKioskId = null;
     state.ui.editingTaskId = null;
@@ -2926,6 +2941,8 @@ async function loadCloudWorkspace(options = {}) {
     preserveProjectCreateMode = false,
   } = options;
 
+  invalidateScheduleAllProjectsCache();
+
   try {
     const [projectsResponse, overviewResponse] = await Promise.all([
       apiRequest("/api/projects"),
@@ -3027,6 +3044,8 @@ async function loadCloudAppWorkspace(options = {}) {
     silent = false,
     preserveAppCreateMode = false,
   } = options;
+
+  invalidateScheduleAllProjectsCache();
 
   try {
     const selectedProjectId = projectId || state.workspace.currentProjectId;
@@ -4289,15 +4308,305 @@ function renderDetails() {
 }
 
 function renderSchedule() {
-  const currentProject = state.workspace.currentProject;
+  const scheduleProjectFilter = normalizeScheduleProjectFilter();
+  const projectIdsWithPendingTasks = getScheduleProjectPendingTaskIds();
 
-  elements.scheduleProjectSelect.innerHTML = buildProjectOptions(
+  state.ui.scheduleProjectFilter = scheduleProjectFilter;
+  elements.scheduleProjectSelect.innerHTML = buildScheduleProjectOptions(
     state.workspace.projects,
-    "暂无项目"
+    projectIdsWithPendingTasks
   );
-  elements.scheduleProjectSelect.value = currentProject?.id || "";
+  elements.scheduleProjectSelect.value = scheduleProjectFilter;
   elements.scheduleProjectSelect.disabled = !state.workspace.projects.length;
   renderTaskCalendarPanel();
+
+  if (shouldLoadCloudScheduleAllProjectsForIndicators()) {
+    void loadCloudScheduleAllProjects({ force: true });
+  }
+}
+
+function normalizeScheduleProjectFilter() {
+  const projects = state.workspace.projects;
+  const selectedValue = state.ui.scheduleProjectFilter;
+  const currentProjectId = state.workspace.currentProject?.id || "";
+
+  if (!projects.length) {
+    return "";
+  }
+
+  if (selectedValue === SCHEDULE_ALL_PROJECTS_VALUE) {
+    return SCHEDULE_ALL_PROJECTS_VALUE;
+  }
+
+  if (projects.some((project) => project.id === selectedValue)) {
+    return selectedValue;
+  }
+
+  return currentProjectId || projects[0]?.id || "";
+}
+
+function getScheduleCalendarData() {
+  const filterValue = normalizeScheduleProjectFilter();
+  const isAllProjects = filterValue === SCHEDULE_ALL_PROJECTS_VALUE;
+
+  if (!filterValue) {
+    return createEmptyScheduleCalendarData();
+  }
+
+  if (isAllProjects) {
+    return getAllProjectsScheduleCalendarData();
+  }
+
+  return getProjectScheduleCalendarData(filterValue);
+}
+
+function createEmptyScheduleCalendarData(overrides = {}) {
+  return {
+    filterValue: "",
+    isAllProjects: false,
+    projects: [],
+    tasks: [],
+    tags: [],
+    apps: [],
+    versions: [],
+    loading: false,
+    error: "",
+    needsLoad: false,
+    ...overrides,
+  };
+}
+
+function getAllProjectsScheduleCalendarData() {
+  if (state.workspace.mode === "guest") {
+    const projectIds = new Set(state.workspace.projects.map((project) => project.id));
+    const apps = sortProjects(
+      state.guestWorkspace.apps.filter((app) => projectIds.has(app.projectId))
+    );
+    const appIds = new Set(apps.map((app) => app.id));
+
+    return createEmptyScheduleCalendarData({
+      filterValue: SCHEDULE_ALL_PROJECTS_VALUE,
+      isAllProjects: true,
+      projects: state.workspace.projects,
+      tasks: state.guestWorkspace.tasks.filter((task) => projectIds.has(task.projectId)),
+      tags: sortTags(state.guestWorkspace.tags.filter((tag) => projectIds.has(tag.projectId))),
+      apps,
+      versions: state.guestWorkspace.versions.filter((version) => appIds.has(version.appId)),
+    });
+  }
+
+  const projectIdsKey = getScheduleProjectIdsKey();
+  const cached = state.scheduleAllProjects;
+
+  if (cached.loading) {
+    return createEmptyScheduleCalendarData({
+      filterValue: SCHEDULE_ALL_PROJECTS_VALUE,
+      isAllProjects: true,
+      projects: state.workspace.projects,
+      loading: true,
+    });
+  }
+
+  if (cached.projectIdsKey === projectIdsKey) {
+    return createEmptyScheduleCalendarData({
+      filterValue: SCHEDULE_ALL_PROJECTS_VALUE,
+      isAllProjects: true,
+      projects: cached.projects,
+      tasks: cached.tasks,
+      tags: cached.tags,
+      apps: cached.apps,
+      versions: cached.versions,
+      error: cached.error,
+    });
+  }
+
+  return createEmptyScheduleCalendarData({
+    filterValue: SCHEDULE_ALL_PROJECTS_VALUE,
+    isAllProjects: true,
+    projects: state.workspace.projects,
+    loading: true,
+    needsLoad: true,
+  });
+}
+
+function getProjectScheduleCalendarData(projectId) {
+  const project = state.workspace.projects.find((item) => item.id === projectId) || null;
+
+  if (!project) {
+    return createEmptyScheduleCalendarData();
+  }
+
+  if (state.workspace.mode === "guest" && projectId !== state.workspace.currentProjectId) {
+    const apps = sortProjects(
+      state.guestWorkspace.apps.filter((app) => app.projectId === projectId)
+    );
+    const appIds = new Set(apps.map((app) => app.id));
+
+    return createEmptyScheduleCalendarData({
+      filterValue: projectId,
+      projects: [project],
+      tasks: state.guestWorkspace.tasks.filter((task) => task.projectId === projectId),
+      tags: sortTags(state.guestWorkspace.tags.filter((tag) => tag.projectId === projectId)),
+      apps,
+      versions: state.guestWorkspace.versions.filter((version) => appIds.has(version.appId)),
+    });
+  }
+
+  return createEmptyScheduleCalendarData({
+    filterValue: projectId,
+    projects: [project],
+    tasks: state.workspace.tasks,
+    tags: state.workspace.tags,
+    apps: getCurrentProjectApps(),
+    versions: getCurrentProjectVersions(),
+  });
+}
+
+async function loadCloudScheduleAllProjects(options = {}) {
+  const { force = false } = options;
+
+  if (
+    state.workspace.mode !== "cloud" ||
+    (!force && state.ui.scheduleProjectFilter !== SCHEDULE_ALL_PROJECTS_VALUE)
+  ) {
+    return;
+  }
+
+  const projects = state.workspace.projects;
+  const projectIdsKey = getScheduleProjectIdsKey();
+
+  if (!projects.length || state.scheduleAllProjects.loading) {
+    return;
+  }
+
+  if (state.scheduleAllProjects.projectIdsKey === projectIdsKey && !state.scheduleAllProjects.error) {
+    return;
+  }
+
+  state.scheduleAllProjects = {
+    ...createEmptyScheduleAllProjectsView(),
+    loading: true,
+    projectIdsKey,
+    projects,
+  };
+  renderSchedule();
+
+  try {
+    const bundles = await Promise.all(
+      projects.map(async (project) => {
+        const [board, appsResponse, versionsResponse] = await Promise.all([
+          apiRequest(`/api/projects/${project.id}/board`),
+          apiRequest(`/api/projects/${project.id}/apps`),
+          apiRequest(`/api/projects/${project.id}/apps/versions`),
+        ]);
+
+        return {
+          project,
+          tasks: Array.isArray(board.tasks) ? board.tasks : [],
+          tags: Array.isArray(board.tags) ? board.tags : [],
+          apps: Array.isArray(appsResponse.apps) ? appsResponse.apps : [],
+          versions: Array.isArray(versionsResponse.versions) ? versionsResponse.versions : [],
+        };
+      })
+    );
+
+    if (projectIdsKey !== getScheduleProjectIdsKey()) {
+      state.scheduleAllProjects = createEmptyScheduleAllProjectsView();
+      renderSchedule();
+      return;
+    }
+
+    state.scheduleAllProjects = {
+      loading: false,
+      error: "",
+      projectIdsKey,
+      projects,
+      tasks: bundles.flatMap((bundle) => bundle.tasks),
+      tags: sortTags(bundles.flatMap((bundle) => bundle.tags)),
+      apps: sortProjects(bundles.flatMap((bundle) => bundle.apps)),
+      versions: bundles.flatMap((bundle) => bundle.versions),
+    };
+  } catch (error) {
+    state.scheduleAllProjects = {
+      ...createEmptyScheduleAllProjectsView(),
+      loading: false,
+      error: error.message,
+      projectIdsKey,
+      projects,
+    };
+    showToast(error.message);
+  }
+
+  renderSchedule();
+}
+
+function getScheduleProjectIdsKey() {
+  return state.workspace.projects.map((project) => project.id).join("|");
+}
+
+function shouldLoadCloudScheduleAllProjectsForIndicators() {
+  if (state.ui.activeTool !== "schedule" || state.workspace.mode !== "cloud") {
+    return false;
+  }
+
+  if (!state.workspace.projects.length || state.scheduleAllProjects.loading) {
+    return false;
+  }
+
+  return state.scheduleAllProjects.projectIdsKey !== getScheduleProjectIdsKey();
+}
+
+function getScheduleProjectPendingTaskIds() {
+  const selectedDate = normalizeCalendarDateKey(state.ui.taskCalendarSelectedDate);
+  const projectIds = new Set();
+
+  getScheduleIndicatorTasks().forEach((task) => {
+    if (isPendingTaskOnScheduleDate(task, selectedDate)) {
+      projectIds.add(task.projectId);
+    }
+  });
+
+  return projectIds;
+}
+
+function getScheduleIndicatorTasks() {
+  const projectIds = new Set(state.workspace.projects.map((project) => project.id));
+
+  if (!projectIds.size) {
+    return [];
+  }
+
+  if (state.workspace.mode === "guest") {
+    return state.guestWorkspace.tasks.filter((task) => projectIds.has(task.projectId));
+  }
+
+  if (
+    state.scheduleAllProjects.projectIdsKey === getScheduleProjectIdsKey() &&
+    !state.scheduleAllProjects.loading &&
+    !state.scheduleAllProjects.error
+  ) {
+    return state.scheduleAllProjects.tasks;
+  }
+
+  return state.workspace.tasks;
+}
+
+function isPendingTaskOnScheduleDate(task, dateKey) {
+  if (!task?.projectId || task.status === "done" || !isCalendarDateKey(dateKey)) {
+    return false;
+  }
+
+  const range = getTaskCalendarRange(task);
+
+  if (!range) {
+    return false;
+  }
+
+  return dateKey >= range.startDateKey && dateKey <= range.endDateKey;
+}
+
+function invalidateScheduleAllProjectsCache() {
+  state.scheduleAllProjects = createEmptyScheduleAllProjectsView();
 }
 
 function renderTagManager() {
@@ -4437,31 +4746,45 @@ function renderTaskFilterControls() {
 }
 
 function renderTaskCalendarPanel() {
-  const currentProject = state.workspace.currentProject;
-  const tasks = sortTasksForDisplay(state.workspace.tasks);
-  const versions = sortVersionsForDisplay(getCurrentProjectVersions());
-  const apps = getCurrentProjectApps();
+  const scheduleData = getScheduleCalendarData();
+  const tasks = sortTasksForDisplay(scheduleData.tasks);
+  const versions = sortVersionsForDisplay(scheduleData.versions);
+  const apps = scheduleData.apps;
   const appMap = new Map(apps.map((app) => [app.id, app]));
-  const eventMap = buildTaskCalendarEventMap(tasks, versions);
+  const projectMap = new Map(scheduleData.projects.map((project) => [project.id, project]));
+  const eventMap =
+    scheduleData.loading || scheduleData.error ? new Map() : buildTaskCalendarEventMap(tasks, versions);
   const selectedDate = normalizeCalendarDateKey(state.ui.taskCalendarSelectedDate);
   const monthKey = normalizeCalendarMonthKey(state.ui.taskCalendarMonth, selectedDate);
+  const hasScheduleScope = Boolean(scheduleData.filterValue) && !scheduleData.error;
 
   state.ui.taskCalendarSelectedDate = selectedDate;
   state.ui.taskCalendarMonth = monthKey;
 
   elements.taskCalendarMonthLabel.textContent = formatCalendarMonthLabel(monthKey);
-  elements.taskCalendarPrevButton.disabled = !currentProject;
-  elements.taskCalendarTodayButton.disabled = !currentProject;
-  elements.taskCalendarNextButton.disabled = !currentProject;
+  elements.taskCalendarPrevButton.disabled = !hasScheduleScope;
+  elements.taskCalendarTodayButton.disabled = !hasScheduleScope;
+  elements.taskCalendarNextButton.disabled = !hasScheduleScope;
   elements.taskCalendarGrid.innerHTML = renderTaskCalendarGrid(monthKey, selectedDate, eventMap, {
-    enabled: Boolean(currentProject),
+    enabled: hasScheduleScope && !scheduleData.loading,
     appMap,
+    projectMap,
+    showProjectName: scheduleData.isAllProjects,
   });
-  renderTaskCalendarDetails(selectedDate, eventMap, currentProject, appMap);
+  renderTaskCalendarDetails(selectedDate, eventMap, scheduleData, appMap, projectMap);
+
+  if (scheduleData.needsLoad) {
+    void loadCloudScheduleAllProjects();
+  }
 }
 
 function renderTaskCalendarGrid(monthKey, selectedDate, eventMap, options = {}) {
-  const { enabled = true, appMap = new Map() } = options;
+  const {
+    enabled = true,
+    appMap = new Map(),
+    projectMap = new Map(),
+    showProjectName = false,
+  } = options;
   const monthStartDate = parseCalendarMonthKey(monthKey);
   const firstWeekday = (monthStartDate.getDay() + 6) % 7;
   const gridStartDate = new Date(
@@ -4506,17 +4829,23 @@ function renderTaskCalendarGrid(monthKey, selectedDate, eventMap, options = {}) 
       >
         <span class="task-calendar-date-number">${escapeHtml(String(day.getDate()))}</span>
         ${entries.length ? `<span class="task-calendar-dot" aria-hidden="true"></span>` : ""}
-        ${renderTaskCalendarDayPreview(entries, appMap)}
+        ${renderTaskCalendarDayPreview(entries, appMap, projectMap, { showProjectName })}
       </button>
     `;
   }).join("");
 }
 
-function renderTaskCalendarDayPreview(entries, appMap = new Map()) {
+function renderTaskCalendarDayPreview(
+  entries,
+  appMap = new Map(),
+  projectMap = new Map(),
+  options = {}
+) {
   if (!entries.length) {
     return "";
   }
 
+  const { showProjectName = false } = options;
   const visibleEntries = entries.slice(0, 2);
   const overflowCount = entries.length - visibleEntries.length;
 
@@ -4525,7 +4854,9 @@ function renderTaskCalendarDayPreview(entries, appMap = new Map()) {
       ${visibleEntries
         .map((entry) => {
           const marker = getScheduleCalendarEntryMarker(entry);
-          const title = getScheduleCalendarEntryTitle(entry, appMap);
+          const title = getScheduleCalendarEntryTitle(entry, appMap, projectMap, {
+            showProjectName,
+          });
 
           return `
             <span class="task-calendar-preview-item">
@@ -4544,15 +4875,36 @@ function renderTaskCalendarDayPreview(entries, appMap = new Map()) {
   `;
 }
 
-function renderTaskCalendarDetails(selectedDate, eventMap, currentProject, appMap = new Map()) {
+function renderTaskCalendarDetails(
+  selectedDate,
+  eventMap,
+  scheduleData,
+  appMap = new Map(),
+  projectMap = new Map()
+) {
   const entries = eventMap.get(selectedDate) || [];
-  const tagMap = new Map(state.workspace.tags.map((tag) => [tag.id, tag]));
+  const tagMap = new Map(scheduleData.tags.map((tag) => [tag.id, tag]));
 
   elements.taskCalendarDetailTitle.textContent = formatCalendarDetailTitle(selectedDate);
-  elements.taskCalendarDetailBadge.textContent = currentProject ? `${entries.length} 条安排` : "0 条安排";
+  elements.taskCalendarDetailBadge.textContent =
+    scheduleData.filterValue && !scheduleData.loading && !scheduleData.error
+      ? `${entries.length} 条安排`
+      : "0 条安排";
 
-  if (!currentProject) {
-    elements.taskCalendarDetailList.innerHTML = createEmptyInlineMarkup("请先选择项目");
+  if (!scheduleData.filterValue) {
+    elements.taskCalendarDetailList.innerHTML = createEmptyInlineMarkup("请先选择项目或所有项目");
+    return;
+  }
+
+  if (scheduleData.loading) {
+    elements.taskCalendarDetailList.innerHTML = createEmptyInlineMarkup("正在加载所有项目日程...");
+    return;
+  }
+
+  if (scheduleData.error) {
+    elements.taskCalendarDetailList.innerHTML = createEmptyInlineMarkup(
+      `加载日程失败：${scheduleData.error}`
+    );
     return;
   }
 
@@ -4562,20 +4914,32 @@ function renderTaskCalendarDetails(selectedDate, eventMap, currentProject, appMa
   }
 
   elements.taskCalendarDetailList.innerHTML = entries
-    .map((entry) => renderScheduleCalendarDetailEntry(entry, tagMap, appMap))
+    .map((entry) =>
+      renderScheduleCalendarDetailEntry(entry, tagMap, appMap, projectMap, {
+        showProjectName: scheduleData.isAllProjects,
+      })
+    )
     .join("");
 }
 
-function renderScheduleCalendarDetailEntry(entry, tagMap, appMap) {
+function renderScheduleCalendarDetailEntry(
+  entry,
+  tagMap,
+  appMap,
+  projectMap,
+  options = {}
+) {
   if (entry.kind === "version") {
-    return renderVersionCalendarDetailEntry(entry, appMap);
+    return renderVersionCalendarDetailEntry(entry, appMap, projectMap, options);
   }
 
-  return renderTaskCalendarDetailEntry(entry, tagMap);
+  return renderTaskCalendarDetailEntry(entry, tagMap, projectMap, options);
 }
 
-function renderTaskCalendarDetailEntry(entry, tagMap) {
+function renderTaskCalendarDetailEntry(entry, tagMap, projectMap = new Map(), options = {}) {
   const { task, markers } = entry;
+  const { showProjectName = false } = options;
+  const project = projectMap.get(task.projectId) || null;
   const taskTags = Array.isArray(task.tagIds)
     ? task.tagIds.map((tagId) => tagMap.get(tagId)).filter(Boolean)
     : [];
@@ -4602,6 +4966,11 @@ function renderTaskCalendarDetailEntry(entry, tagMap) {
         ${
           task.assignee
             ? `<span class="priority-pill priority-low">负责人 ${escapeHtml(task.assignee)}</span>`
+            : ""
+        }
+        ${
+          showProjectName && project
+            ? `<span class="priority-pill priority-low">项目 ${escapeHtml(project.name)}</span>`
             : ""
         }
       </div>
@@ -4685,9 +5054,16 @@ function formatCalendarDateRangeLabel(startDateKey, endDateKey) {
   return `${formatDateOnly(startDateKey)} 至 ${formatDateOnly(endDateKey)}`;
 }
 
-function renderVersionCalendarDetailEntry(entry, appMap) {
+function renderVersionCalendarDetailEntry(
+  entry,
+  appMap,
+  projectMap = new Map(),
+  options = {}
+) {
   const { version, markers } = entry;
+  const { showProjectName = false } = options;
   const app = appMap.get(version.appId) || null;
+  const project = app?.projectId ? projectMap.get(app.projectId) : null;
 
   return `
     <article class="task-calendar-detail-item">
@@ -4708,6 +5084,11 @@ function renderVersionCalendarDetailEntry(entry, appMap) {
         ${
           app
             ? `<span class="priority-pill priority-low">App ${escapeHtml(app.name || "未命名 App")}</span>`
+            : ""
+        }
+        ${
+          showProjectName && project
+            ? `<span class="priority-pill priority-low">项目 ${escapeHtml(project.name)}</span>`
             : ""
         }
         <span class="priority-pill priority-${escapeHtml(version.priority || "medium")}">
@@ -6787,6 +7168,32 @@ function buildProjectOptions(projects, emptyLabel) {
     .join("");
 }
 
+function buildScheduleProjectOptions(projects, projectIdsWithPendingTasks = new Set()) {
+  if (!projects.length) {
+    return `<option value="">${escapeHtml("暂无项目")}</option>`;
+  }
+
+  const allProjectsLabel = projectIdsWithPendingTasks.size ? "● 所有项目" : "所有项目";
+
+  return [
+    `<option value="${escapeHtml(SCHEDULE_ALL_PROJECTS_VALUE)}">${escapeHtml(
+      allProjectsLabel
+    )}</option>`,
+    ...projects.map((project) => {
+      const hasPendingTasks = projectIdsWithPendingTasks.has(project.id);
+      const projectLabel = `${hasPendingTasks ? "● " : ""}${project.name}${
+        project.archived ? " (已归档)" : ""
+      }`;
+
+      return `
+        <option value="${escapeHtml(project.id)}">
+          ${escapeHtml(projectLabel)}
+        </option>
+      `;
+    }),
+  ].join("");
+}
+
 function buildStatusOptions(selectedStatus) {
   return STATUS_ORDER.map(
     (status) => `
@@ -8474,5 +8881,18 @@ function createEmptyAppWorkspaceView(mode) {
     currentApp: null,
     versions: [],
     overview: createEmptyAppOverview(),
+  };
+}
+
+function createEmptyScheduleAllProjectsView() {
+  return {
+    loading: false,
+    error: "",
+    projectIdsKey: "",
+    projects: [],
+    tasks: [],
+    tags: [],
+    apps: [],
+    versions: [],
   };
 }
