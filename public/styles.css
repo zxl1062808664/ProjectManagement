@@ -1208,6 +1208,11 @@ body[data-theme="night"] .panel::before {
   color: var(--accent-deep);
 }
 
+.task-calendar-preview-item.is-delayed,
+.task-calendar-preview-item.is-delayed .task-calendar-preview-marker {
+  color: var(--red);
+}
+
 .task-calendar-preview-more {
   color: var(--accent-deep);
 }
@@ -1228,6 +1233,11 @@ body[data-theme="night"] .panel::before {
   border: 1px solid rgba(79, 93, 110, 0.12);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.66);
+}
+
+.task-calendar-detail-item.is-delayed {
+  border-color: rgba(168, 71, 56, 0.24);
+  background: rgba(168, 71, 56, 0.06);
 }
 
 .task-calendar-detail-title {
@@ -1532,6 +1542,11 @@ body[data-theme="night"] .panel::before {
 .status-done {
   background: rgba(79, 122, 86, 0.14);
   color: var(--green);
+}
+
+.status-delayed {
+  background: rgba(168, 71, 56, 0.14);
+  color: var(--red);
 }
 
 .priority-low {
@@ -2267,6 +2282,11 @@ body[data-theme="night"] .upcoming-empty {
   border-color: rgba(148, 163, 184, 0.16);
 }
 
+body[data-theme="night"] .task-calendar-detail-item.is-delayed {
+  background: rgba(104, 44, 42, 0.28);
+  border-color: rgba(221, 125, 114, 0.26);
+}
+
 body[data-theme="night"] .empty-state {
   background: rgba(19, 28, 39, 0.56);
   border-color: rgba(148, 163, 184, 0.2);
@@ -2378,6 +2398,11 @@ body[data-theme="night"] .status-review {
 body[data-theme="night"] .status-done {
   background: rgba(146, 199, 152, 0.18);
   color: var(--green);
+}
+
+body[data-theme="night"] .status-delayed {
+  background: rgba(221, 125, 114, 0.18);
+  color: var(--red);
 }
 
 body[data-theme="night"] .chip {

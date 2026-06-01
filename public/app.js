@@ -4857,9 +4857,10 @@ function renderTaskCalendarDayPreview(
           const title = getScheduleCalendarEntryTitle(entry, appMap, projectMap, {
             showProjectName,
           });
+          const isDelayed = isScheduleCalendarEntryDelayed(entry);
 
           return `
-            <span class="task-calendar-preview-item">
+            <span class="task-calendar-preview-item ${isDelayed ? "is-delayed" : ""}">
               <span class="task-calendar-preview-marker">${escapeHtml(marker)}</span>
               ${escapeHtml(title)}
             </span>
@@ -4940,16 +4941,17 @@ function renderTaskCalendarDetailEntry(entry, tagMap, projectMap = new Map(), op
   const { task, markers } = entry;
   const { showProjectName = false } = options;
   const project = projectMap.get(task.projectId) || null;
+  const scheduleStatus = getTaskScheduleStatus(task);
   const taskTags = Array.isArray(task.tagIds)
     ? task.tagIds.map((tagId) => tagMap.get(tagId)).filter(Boolean)
     : [];
 
   return `
-    <article class="task-calendar-detail-item">
+    <article class="task-calendar-detail-item ${scheduleStatus.isDelayed ? "is-delayed" : ""}">
       <div class="task-calendar-detail-title">
         <strong>${escapeHtml(task.title || "未命名任务")}</strong>
-        <span class="status-pill status-${escapeHtml(task.status || "todo")}">
-          ${escapeHtml(STATUS_META[task.status]?.label || "未开始")}
+        <span class="status-pill status-${escapeHtml(scheduleStatus.className)}">
+          ${escapeHtml(scheduleStatus.label)}
         </span>
       </div>
 
@@ -5184,10 +5186,15 @@ function collectTaskCalendarMarkers(task) {
 
   const cursor = parseCalendarDateKey(range.startDateKey);
   const endDate = parseCalendarDateKey(range.endDateKey);
+  const isOverdue = isTaskOverdue(task);
 
   while (cursor <= endDate) {
     const dateKey = formatDateInputValue(cursor);
     const markers = [];
+
+    if (isOverdue && range.hasDueDate && dateKey >= task.dueDate) {
+      markers.push("延期");
+    }
 
     if (range.hasStartDate && dateKey === task.startDate) {
       markers.push("开始");
@@ -5216,6 +5223,9 @@ function getTaskCalendarRange(task) {
   const hasStartDate = isCalendarDateKey(task.startDate);
   const hasDueDate = isCalendarDateKey(task.dueDate);
   const hasCompletedDate = isCalendarDateKey(task.completedDate);
+  const today = todayString();
+  const shouldExtendOverdueTask =
+    hasDueDate && task.status !== "done" && task.dueDate < today;
 
   if (!hasStartDate && !hasDueDate && !hasCompletedDate) {
     return null;
@@ -5226,15 +5236,18 @@ function getTaskCalendarRange(task) {
 
   if (hasStartDate) {
     startDateKey = task.startDate;
-    endDateKey =
-      task.status === "done" && hasCompletedDate
-        ? task.completedDate
-        : hasDueDate
-          ? task.dueDate
-          : task.startDate;
+    if (task.status === "done" && hasCompletedDate) {
+      endDateKey = task.completedDate;
+    } else if (shouldExtendOverdueTask) {
+      endDateKey = today;
+    } else if (hasDueDate) {
+      endDateKey = task.dueDate;
+    } else {
+      endDateKey = task.startDate;
+    }
   } else if (hasDueDate) {
     startDateKey = task.status === "done" && hasCompletedDate ? task.completedDate : task.dueDate;
-    endDateKey = startDateKey;
+    endDateKey = shouldExtendOverdueTask ? today : startDateKey;
   } else {
     startDateKey = task.completedDate;
     endDateKey = task.completedDate;
@@ -5299,6 +5312,37 @@ function appendScheduleCalendarEntries(eventMap, entrySource) {
 
 function getScheduleCalendarEntryMarker(entry) {
   return entry.markers[0] || (entry.kind === "version" ? "版本" : "任务");
+}
+
+function isScheduleCalendarEntryDelayed(entry) {
+  return entry.kind === "task" && isTaskOverdue(entry.task);
+}
+
+function getTaskScheduleStatus(task) {
+  if (isTaskOverdue(task)) {
+    return {
+      className: "delayed",
+      label: "已延期",
+      isDelayed: true,
+    };
+  }
+
+  const status = STATUS_META[task.status] ? task.status : "todo";
+
+  return {
+    className: status,
+    label: STATUS_META[status].label,
+    isDelayed: false,
+  };
+}
+
+function isTaskOverdue(task, referenceDate = todayString()) {
+  if (!task || task.status === "done" || !isCalendarDateKey(task.dueDate)) {
+    return false;
+  }
+
+  const normalizedReferenceDate = normalizeCalendarDateKey(referenceDate);
+  return task.dueDate < normalizedReferenceDate;
 }
 
 function getScheduleCalendarEntryTitle(entry, appMap = new Map()) {
