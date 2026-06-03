@@ -810,6 +810,7 @@ function exportProject(userId, projectId) {
       notes: kiosk.notes,
     })),
     tasks: board.tasks.map((task) => ({
+      id: task.id,
       title: task.title,
       description: task.description,
       notes: task.notes,
@@ -900,6 +901,7 @@ function importProjectPayload(userId, payload) {
   });
 
   const tagIdByName = new Map();
+  const taskIdMap = new Map();
   tags.forEach((tag) => {
     const createdTag = createTag(userId, createdProject.id, tag);
     tagIdByName.set(createdTag.name, createdTag.id);
@@ -914,7 +916,7 @@ function importProjectPayload(userId, payload) {
       ? task.tagNames.map((tagName) => tagIdByName.get(String(tagName))).filter(Boolean)
       : [];
 
-    persistTaskRecord(
+    const createdTask = persistTaskRecord(
       userId,
       createdProject.id,
       normalizeTaskInput(createdProject.id, {
@@ -931,9 +933,12 @@ function importProjectPayload(userId, payload) {
         subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
       })
     );
+    if (task.id) {
+      taskIdMap.set(String(task.id), createdTask.id);
+    }
   });
 
-  importAppsIntoProject(userId, createdProject.id, apps);
+  importAppsIntoProject(userId, createdProject.id, apps, { taskIdMap });
 
   return createdProject;
 }

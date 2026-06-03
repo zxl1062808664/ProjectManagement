@@ -1,4 +1,4 @@
-const LEGACY_STORAGE_KEY = "task-atlas-data-v1";
+﻿const LEGACY_STORAGE_KEY = "task-atlas-data-v1";
 const GUEST_WORKSPACE_KEY = "task-atlas-workspace-v2";
 const THEME_STORAGE_KEY = "task-atlas-theme-v1";
 const SCHEDULE_ALL_PROJECTS_VALUE = "__all_projects__";
@@ -175,6 +175,10 @@ const state = {
     versionDetailSearch: "",
     versionDetailStatusFilter: "all",
     versionDetailChannelFilter: "all",
+    versionTaskDropdownOpen: false,
+    versionTaskSearch: "",
+    versionTaskSelectedIds: [],
+    versionTaskSelectionKey: "",
   },
   toastTimer: null,
 };
@@ -351,6 +355,7 @@ const elements = {
   plannedDateInput: document.querySelector("#plannedDateInput"),
   releaseDateInput: document.querySelector("#releaseDateInput"),
   publishedDateInput: document.querySelector("#publishedDateInput"),
+  versionTaskPicker: document.querySelector("#versionTaskPicker"),
   versionSubmitButton: document.querySelector("#versionSubmitButton"),
   versionResetButton: document.querySelector("#versionResetButton"),
   versionListSummary: document.querySelector("#versionListSummary"),
@@ -495,6 +500,9 @@ function bindEvents() {
   elements.appDeleteButton.addEventListener("click", handleAppDelete);
   elements.versionForm.addEventListener("submit", handleVersionFormSubmit);
   elements.versionResetButton.addEventListener("click", handleVersionReset);
+  elements.versionTaskPicker.addEventListener("click", handleVersionTaskPickerClick);
+  elements.versionTaskPicker.addEventListener("input", handleVersionTaskPickerInput);
+  elements.versionTaskPicker.addEventListener("change", handleVersionTaskPickerChange);
   elements.versionStatusInput.addEventListener("change", handleVersionFormStatusChange);
   elements.versionSearchInput.addEventListener("input", handleVersionSearchInput);
   elements.versionStatusFilterInput.addEventListener("change", handleVersionFilterChange);
@@ -533,6 +541,7 @@ function bindEvents() {
   elements.clearDoneButton.addEventListener("click", handleClearCompleted);
   elements.clearGuestDataButton.addEventListener("click", handleClearGuestData);
   elements.importGuestButton.addEventListener("click", handleImportGuestToCloud);
+  document.addEventListener("click", handleDocumentClick);
   document.addEventListener("keydown", handleGlobalKeydown);
 }
 
@@ -879,6 +888,11 @@ function handleGlobalKeydown(event) {
     return;
   }
 
+  if (state.ui.versionTaskDropdownOpen) {
+    closeVersionTaskDropdown();
+    return;
+  }
+
   if (state.ui.projectEditDialogOpen) {
     closeProjectEditDialog();
   }
@@ -898,6 +912,22 @@ function handleGlobalKeydown(event) {
   if (state.ui.activeAppDetailPanel) {
     closeAppDetailPanel();
   }
+}
+
+function handleDocumentClick(event) {
+  if (!state.ui.versionTaskDropdownOpen) {
+    return;
+  }
+
+  const eventPath = typeof event.composedPath === "function" ? event.composedPath() : [];
+  if (
+    elements.versionTaskPicker.contains(event.target) ||
+    eventPath.includes(elements.versionTaskPicker)
+  ) {
+    return;
+  }
+
+  closeVersionTaskDropdown();
 }
 
 async function setCurrentProject(projectId, options = {}) {
@@ -1023,6 +1053,7 @@ function handleOpenAppPanel() {
 function handleOpenVersionPanel() {
   state.ui.editingVersionId = null;
   state.ui.activeAppDetailPanel = "version";
+  resetVersionTaskSelectionDraft();
   render();
 
   window.requestAnimationFrame(() => {
@@ -1053,6 +1084,7 @@ function closeAppDetailPanel() {
 
   if (activePanel === "version") {
     state.ui.editingVersionId = null;
+    resetVersionTaskSelectionDraft();
   }
 
   state.ui.activeAppDetailPanel = null;
@@ -1083,6 +1115,7 @@ async function setCurrentApp(appId, options = {}) {
     state.ui.editingVersionId = null;
     state.ui.expandedVersionRecordIds = [];
     state.ui.selectedVersionIds = [];
+    resetVersionTaskSelectionDraft();
     resetVersionDetailFilters();
   }
 
@@ -1852,6 +1885,53 @@ function handleTaskTagPickerClick(event) {
   button.classList.toggle("is-selected", !isSelected);
 }
 
+function handleVersionTaskPickerClick(event) {
+  const removeButton = event.target.closest("[data-version-task-remove]");
+  if (removeButton) {
+    setVersionTaskSelection(removeButton.dataset.versionTaskRemove, false);
+    renderVersionTaskPickerControl();
+    return;
+  }
+
+  const clearButton = event.target.closest("[data-version-task-clear]");
+  if (clearButton) {
+    state.ui.versionTaskSelectedIds = [];
+    state.ui.versionTaskDropdownOpen = true;
+    renderVersionTaskPickerControl({ focusSearch: true });
+    return;
+  }
+
+  const toggleButton = event.target.closest("[data-version-task-dropdown-toggle]");
+  if (!toggleButton || toggleButton.disabled) {
+    return;
+  }
+
+  state.ui.versionTaskDropdownOpen = !state.ui.versionTaskDropdownOpen;
+  renderVersionTaskPickerControl({ focusSearch: state.ui.versionTaskDropdownOpen });
+}
+
+function handleVersionTaskPickerInput(event) {
+  const searchInput = event.target.closest("[data-version-task-search]");
+  if (!searchInput) {
+    return;
+  }
+
+  state.ui.versionTaskSearch = searchInput.value;
+  state.ui.versionTaskDropdownOpen = true;
+  renderVersionTaskPickerControl({ focusSearch: true });
+}
+
+function handleVersionTaskPickerChange(event) {
+  const checkbox = event.target.closest("[data-version-task-checkbox]");
+  if (!checkbox) {
+    return;
+  }
+
+  setVersionTaskSelection(checkbox.dataset.taskId, checkbox.checked);
+  state.ui.versionTaskDropdownOpen = true;
+  renderVersionTaskPickerControl();
+}
+
 function handleTaskSearchInput(event) {
   state.ui.detailSearch = event.target.value.trim();
   renderTaskListPanel();
@@ -2045,6 +2125,7 @@ async function handleTaskListClick(event) {
     } else {
       updateGuestWorkspace((workspace) => {
         workspace.tasks = workspace.tasks.filter((item) => item.id !== taskId);
+        removeTaskIdsFromGuestVersions(workspace, taskId);
         touchGuestProject(workspace, task.projectId, new Date().toISOString());
       });
       state.ui.editingTaskId = null;
@@ -2426,6 +2507,7 @@ async function handleVersionFormSubmit(event) {
     plannedDate: normalizeLocalDueDate(elements.plannedDateInput.value),
     releaseDate: normalizeLocalDueDate(elements.releaseDateInput.value),
     publishedDate: normalizeLocalDueDate(elements.publishedDateInput.value),
+    taskIds: getSelectedVersionTaskIds(),
   };
 
   const editingVersionId = state.ui.editingVersionId;
@@ -2445,6 +2527,7 @@ async function handleVersionFormSubmit(event) {
       }
 
       state.ui.editingVersionId = null;
+      resetVersionTaskSelectionDraft();
       if (!editingVersionId) {
         state.ui.activeAppDetailPanel = null;
       }
@@ -2492,6 +2575,7 @@ async function handleVersionFormSubmit(event) {
     }
 
     state.ui.editingVersionId = null;
+    resetVersionTaskSelectionDraft();
     if (!editingVersionId) {
       state.ui.activeAppDetailPanel = null;
     }
@@ -2505,6 +2589,7 @@ async function handleVersionFormSubmit(event) {
 
 function handleVersionReset() {
   state.ui.editingVersionId = null;
+  resetVersionTaskSelectionDraft();
   renderVersionEditor();
 }
 
@@ -2631,6 +2716,7 @@ async function handleVersionListClick(event) {
   if (actionButton.dataset.versionAction === "edit") {
     state.ui.editingVersionId = versionId;
     state.ui.activeAppDetailPanel = "version";
+    resetVersionTaskSelectionDraft();
     render();
     window.requestAnimationFrame(() => {
       if (
@@ -3368,9 +3454,13 @@ async function handleClearCompleted() {
       await loadCloudWorkspace({ projectId: currentProjectId });
     } else {
       updateGuestWorkspace((workspace) => {
+        const removedTaskIds = workspace.tasks
+          .filter((task) => task.projectId === currentProjectId && task.status === "done")
+          .map((task) => task.id);
         workspace.tasks = workspace.tasks.filter(
           (task) => task.projectId !== currentProjectId || task.status !== "done"
         );
+        removeTaskIdsFromGuestVersions(workspace, removedTaskIds);
         touchGuestProject(workspace, currentProjectId, new Date().toISOString());
       });
       syncGuestView(currentProjectId);
@@ -5615,6 +5705,142 @@ function renderTaskTagPicker(tags, selectedTagIds) {
     .join("");
 }
 
+function renderVersionTaskPicker(tasks, selectedTaskIds) {
+  if (!tasks.length) {
+    return createEmptyInlineMarkup("当前项目还没有任务，可先在任务管理里创建");
+  }
+
+  const taskMap = new Map(tasks.map((task) => [String(task.id), task]));
+  const selectedIds = normalizeVersionTaskSelectionIds(selectedTaskIds).filter((taskId) =>
+    taskMap.has(taskId)
+  );
+  const selectedIdSet = new Set(selectedIds);
+  const selectedTasks = selectedIds.map((taskId) => taskMap.get(taskId)).filter(Boolean);
+  const search = state.ui.versionTaskSearch.trim().toLowerCase();
+  const filteredTasks = tasks.filter((task) => taskMatchesVersionTaskSearch(task, search));
+  const isOpen = state.ui.versionTaskDropdownOpen;
+  const selectedSummary = selectedTasks.length
+    ? selectedTasks
+        .slice(0, 3)
+        .map((task) => task.title || "未命名任务")
+        .join("、")
+    : "选择关联任务";
+  const overflowSummary = selectedTasks.length > 3 ? ` 等 ${selectedTasks.length} 项` : "";
+  const optionMarkup = filteredTasks.length
+    ? filteredTasks.map((task) => renderVersionTaskOption(task, selectedIdSet)).join("")
+    : `<div class="empty-inline version-task-empty">没有匹配的任务</div>`;
+  const selectedMarkup = selectedTasks.length
+    ? `
+        <div class="version-task-selected-strip" aria-label="已选关联任务">
+          ${selectedTasks.map((task) => renderSelectedVersionTaskChip(task)).join("")}
+        </div>
+      `
+    : "";
+
+  return `
+    <div class="version-task-combobox ${isOpen ? "is-open" : ""}">
+      <button
+        class="version-task-select-button"
+        type="button"
+        data-version-task-dropdown-toggle
+        aria-haspopup="listbox"
+        aria-expanded="${String(isOpen)}"
+        aria-controls="versionTaskDropdownPanel"
+      >
+        <span class="version-task-select-main">
+          <span class="version-task-select-summary">
+            ${escapeHtml(selectedSummary)}${escapeHtml(overflowSummary)}
+          </span>
+          <span class="version-task-select-subcopy">
+            ${escapeHtml(
+              search ? `筛选到 ${filteredTasks.length} / ${tasks.length} 项任务` : `${tasks.length} 项任务可选`
+            )}
+          </span>
+        </span>
+        <span class="version-task-select-count">已选 ${selectedTasks.length}</span>
+        <span class="version-task-select-arrow" aria-hidden="true"></span>
+      </button>
+
+      <div
+        class="version-task-dropdown-panel"
+        id="versionTaskDropdownPanel"
+        ${isOpen ? "" : "hidden"}
+      >
+        <div class="version-task-dropdown-tools">
+          <input
+            class="version-task-search"
+            type="search"
+            data-version-task-search
+            value="${escapeHtml(state.ui.versionTaskSearch)}"
+            placeholder="搜索任务标题、负责人或状态"
+            aria-label="搜索关联任务"
+            autocomplete="off"
+          />
+          <button
+            class="ghost-button mini-button version-task-clear"
+            type="button"
+            data-version-task-clear
+            ${selectedTasks.length ? "" : "disabled"}
+          >
+            清空
+          </button>
+        </div>
+
+        <div class="version-task-options" role="listbox" aria-multiselectable="true">
+          ${optionMarkup}
+        </div>
+      </div>
+
+      ${selectedMarkup}
+    </div>
+  `;
+}
+
+function renderVersionTaskOption(task, selectedIdSet) {
+  const taskId = String(task.id);
+  const isSelected = selectedIdSet.has(taskId);
+  const taskStatusLabel = STATUS_META[task.status]?.label || "未开始";
+  const taskAssignee = task.assignee ? ` · ${task.assignee}` : "";
+  const taskDate = task.dueDate ? ` · 截止 ${task.dueDate}` : "";
+
+  return `
+    <label
+      class="version-task-option ${isSelected ? "is-selected" : ""}"
+      role="option"
+      aria-selected="${String(isSelected)}"
+      style="--tag-color:${escapeHtml(getStatusAccentColor(task.status))};"
+    >
+      <input
+        type="checkbox"
+        data-version-task-checkbox
+        data-task-id="${escapeHtml(taskId)}"
+        ${isSelected ? "checked" : ""}
+      />
+      <span class="version-task-option-check" aria-hidden="true"></span>
+      <span class="version-task-option-dot" aria-hidden="true"></span>
+      <span class="version-task-option-copy">
+        <strong>${escapeHtml(task.title || "未命名任务")}</strong>
+        <small>${escapeHtml(`${taskStatusLabel}${taskAssignee}${taskDate}`)}</small>
+      </span>
+    </label>
+  `;
+}
+
+function renderSelectedVersionTaskChip(task) {
+  return `
+    <button
+      class="version-task-selected-chip"
+      type="button"
+      data-version-task-remove="${escapeHtml(task.id)}"
+      style="--tag-color:${escapeHtml(getStatusAccentColor(task.status))};"
+      aria-label="${escapeHtml(`移除关联任务：${task.title || "未命名任务"}`)}"
+    >
+      <span>${escapeHtml(task.title || "未命名任务")}</span>
+      <span aria-hidden="true">x</span>
+    </button>
+  `;
+}
+
 function buildTaskTagFilterOptions(tags) {
   return [
     `<option value="all">全部标签</option>`,
@@ -5868,13 +6094,19 @@ function renderAppDetails() {
 function renderVersionEditor() {
   const currentProject = state.workspace.currentProject;
   const currentApp = state.appWorkspace.currentApp;
+  const projectTasks = sortTasksForDisplay(state.workspace.tasks);
   const versions = sortVersionsForDisplay(state.appWorkspace.versions);
   const editingVersion =
     versions.find((version) => version.id === state.ui.editingVersionId) || null;
+  syncVersionTaskSelectionDraft(
+    currentApp ? `${currentProject?.id || ""}:${currentApp.id}:${editingVersion?.id || "new"}` : "",
+    editingVersion?.taskIds || [],
+    projectTasks
+  );
 
   elements.versionEditorModeBadge.textContent = editingVersion ? "编辑版本" : "新版本";
   elements.versionAppHint.textContent = currentApp
-    ? `当前项目：${currentProject?.name || "未选择"}，当前 App：${currentApp.name}。这里可以维护版本号、构建号、资源版本、渠道、状态、优先级、日期和发布备注，其中版本号、构建号、资源版本至少填写一项。`
+    ? `当前项目：${currentProject?.name || "未选择"}，当前 App：${currentApp.name}。这里可以维护版本号、构建号、资源版本、渠道、状态、优先级、日期、发布备注，并绑定当前项目任务，其中版本号、构建号、资源版本至少填写一项。`
     : "请先选择项目和 App，再在这里录入版本。";
   elements.versionIdInput.value = editingVersion?.id || "";
   elements.versionNameInput.value = editingVersion?.versionName || "";
@@ -5889,6 +6121,9 @@ function renderVersionEditor() {
   elements.plannedDateInput.value = editingVersion?.plannedDate || "";
   elements.releaseDateInput.value = editingVersion?.releaseDate || "";
   elements.publishedDateInput.value = editingVersion?.publishedDate || "";
+  elements.versionTaskPicker.innerHTML = currentApp
+    ? renderVersionTaskPicker(projectTasks, state.ui.versionTaskSelectedIds)
+    : createEmptyInlineMarkup("请先选择项目和 App，再绑定任务");
   elements.versionSubmitButton.textContent = editingVersion ? "保存版本" : "创建版本";
   elements.versionResetButton.textContent = editingVersion ? "取消编辑" : "清空表单";
   setFormDisabled(elements.versionForm, !currentApp);
@@ -6017,6 +6252,7 @@ function renderVersionRecord(version) {
   const isSelected = state.ui.selectedVersionIds.includes(version.id);
   const isExpanded = state.ui.expandedVersionRecordIds.includes(version.id);
   const displayName = buildVersionDisplayName(version);
+  const linkedTasks = getVersionTaskEntries(version);
 
   return `
     <article class="task-record-card">
@@ -6111,6 +6347,9 @@ function renderVersionRecord(version) {
                 )}</span>`
               : ""
           }
+          <span class="priority-pill priority-low">
+            ${escapeHtml(linkedTasks.length ? `关联任务 ${linkedTasks.length}` : "未绑定任务")}
+          </span>
           ${
             version.plannedDate
               ? `<span class="priority-pill priority-low">开始 ${escapeHtml(
@@ -6144,6 +6383,27 @@ function renderVersionRecord(version) {
             ? `<p class="task-note"><strong>备注：</strong>${escapeHtml(version.notes)}</p>`
             : ""
         }
+        ${
+          linkedTasks.length
+            ? `<div class="meta-row">
+                ${linkedTasks
+                  .map(
+                    (task) => `
+                      <span
+                        class="chip category"
+                        style="background:${escapeHtml(hexToSoftRgba(getStatusAccentColor(task.status), 0.14))};color:${escapeHtml(
+                          getStatusAccentColor(task.status)
+                        )};"
+                        title="${escapeHtml(`${task.title}${task.assignee ? ` · ${task.assignee}` : ""}`)}"
+                      >
+                        ${escapeHtml(task.title)}
+                      </span>
+                    `
+                  )
+                  .join("")}
+              </div>`
+            : ""
+        }
 
         <div class="task-record-meta">
           <span>创建于 ${escapeHtml(formatDateTime(version.createdAt))}</span>
@@ -6172,6 +6432,7 @@ function getFilteredAppVersions(versions) {
       return true;
     }
 
+    const linkedTasks = getVersionTaskEntries(version);
     const haystack = [
       version.versionName,
       version.buildNumber,
@@ -6182,6 +6443,9 @@ function getFilteredAppVersions(versions) {
       version.plannedDate,
       version.releaseDate,
       version.publishedDate,
+      linkedTasks.map((task) => task.title).join(" "),
+      linkedTasks.map((task) => task.assignee || "").join(" "),
+      linkedTasks.map((task) => STATUS_META[task.status]?.label || "").join(" "),
       VERSION_STATUS_META[version.status]?.label || "",
       VERSION_CHANNEL_META[version.channel]?.label || "",
     ]
@@ -6992,7 +7256,27 @@ function buildVersionSummaryText(version) {
     lines.push(`发布备注：${version.notes}`);
   }
 
+  const linkedTasks = getVersionTaskEntries(version);
+  if (linkedTasks.length) {
+    lines.push(
+      `关联任务：${linkedTasks
+        .map((task) =>
+          `${task.title}${task.assignee ? `（${task.assignee}）` : ""}`
+        )
+        .join("，")}`
+    );
+  }
+
   return lines.join("\n");
+}
+
+function getVersionTaskEntries(version, tasks = state.workspace.tasks) {
+  if (!version || !Array.isArray(version.taskIds) || !version.taskIds.length) {
+    return [];
+  }
+
+  const taskMap = new Map(tasks.map((task) => [String(task.id), task]));
+  return version.taskIds.map((taskId) => taskMap.get(String(taskId))).filter(Boolean);
 }
 
 function buildVersionDisplayName(version) {
@@ -7166,6 +7450,142 @@ function getSelectedTaskTagIds() {
   return [...elements.taskTagPicker.querySelectorAll("[data-tag-id][aria-pressed='true']")].map(
     (button) => String(button.dataset.tagId)
   );
+}
+
+function getSelectedVersionTaskIds() {
+  const availableTaskIds = new Set(state.workspace.tasks.map((task) => String(task.id)));
+  return normalizeVersionTaskSelectionIds(state.ui.versionTaskSelectedIds).filter((taskId) =>
+    availableTaskIds.has(taskId)
+  );
+}
+
+function syncVersionTaskSelectionDraft(selectionKey, selectedTaskIds, tasks = []) {
+  if (!selectionKey) {
+    resetVersionTaskSelectionDraft();
+    return;
+  }
+
+  const availableTaskIds = new Set(tasks.map((task) => String(task.id)));
+  if (state.ui.versionTaskSelectionKey !== selectionKey) {
+    state.ui.versionTaskSelectionKey = selectionKey;
+    state.ui.versionTaskSelectedIds = normalizeVersionTaskSelectionIds(selectedTaskIds).filter(
+      (taskId) => availableTaskIds.has(taskId)
+    );
+    state.ui.versionTaskSearch = "";
+    state.ui.versionTaskDropdownOpen = false;
+    return;
+  }
+
+  state.ui.versionTaskSelectedIds = normalizeVersionTaskSelectionIds(
+    state.ui.versionTaskSelectedIds
+  ).filter((taskId) => availableTaskIds.has(taskId));
+}
+
+function resetVersionTaskSelectionDraft() {
+  state.ui.versionTaskSelectionKey = "";
+  state.ui.versionTaskSelectedIds = [];
+  state.ui.versionTaskSearch = "";
+  state.ui.versionTaskDropdownOpen = false;
+}
+
+function normalizeVersionTaskSelectionIds(taskIds) {
+  if (!Array.isArray(taskIds)) {
+    return [];
+  }
+
+  return [...new Set(taskIds.map((taskId) => String(taskId || "").trim()).filter(Boolean))];
+}
+
+function setVersionTaskSelection(taskId, isSelected) {
+  const normalizedTaskId = String(taskId || "").trim();
+  if (!normalizedTaskId) {
+    return;
+  }
+
+  const availableTaskIds = new Set(state.workspace.tasks.map((task) => String(task.id)));
+  if (!availableTaskIds.has(normalizedTaskId)) {
+    return;
+  }
+
+  const selectedIds = normalizeVersionTaskSelectionIds(state.ui.versionTaskSelectedIds);
+  if (isSelected && !selectedIds.includes(normalizedTaskId)) {
+    state.ui.versionTaskSelectedIds = [...selectedIds, normalizedTaskId];
+    return;
+  }
+
+  if (!isSelected) {
+    state.ui.versionTaskSelectedIds = selectedIds.filter((id) => id !== normalizedTaskId);
+  }
+}
+
+function closeVersionTaskDropdown() {
+  state.ui.versionTaskDropdownOpen = false;
+  renderVersionTaskPickerControl();
+}
+
+function renderVersionTaskPickerControl(options = {}) {
+  const { focusSearch = false } = options;
+  const currentProject = state.workspace.currentProject;
+  const currentApp = state.appWorkspace.currentApp;
+  const projectTasks = sortTasksForDisplay(state.workspace.tasks);
+
+  syncVersionTaskSelectionDraft(
+    currentApp
+      ? `${currentProject?.id || ""}:${currentApp.id}:${state.ui.editingVersionId || "new"}`
+      : "",
+    state.ui.versionTaskSelectedIds,
+    projectTasks
+  );
+
+  elements.versionTaskPicker.innerHTML = currentApp
+    ? renderVersionTaskPicker(projectTasks, state.ui.versionTaskSelectedIds)
+    : createEmptyInlineMarkup("请先选择项目和 App，再绑定任务");
+
+  if (!focusSearch || !state.ui.versionTaskDropdownOpen) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    const searchInput = elements.versionTaskPicker.querySelector("[data-version-task-search]");
+    if (!searchInput || typeof searchInput.focus !== "function") {
+      return;
+    }
+
+    searchInput.focus();
+    const cursorPosition = searchInput.value.length;
+    if (typeof searchInput.setSelectionRange === "function") {
+      searchInput.setSelectionRange(cursorPosition, cursorPosition);
+    }
+  });
+}
+
+function taskMatchesVersionTaskSearch(task, search) {
+  if (!search) {
+    return true;
+  }
+
+  const taskStatusLabel = STATUS_META[task.status]?.label || "";
+  return [task.title, task.description, task.notes, task.assignee, taskStatusLabel, task.dueDate]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(search);
+}
+
+function getStatusAccentColor(status) {
+  if (status === "done") {
+    return "#4f7a56";
+  }
+
+  if (status === "review") {
+    return "#b9892d";
+  }
+
+  if (status === "doing") {
+    return "#245a73";
+  }
+
+  return "#4f5d6e";
 }
 
 function parseSubtasksInput(value) {
@@ -7376,6 +7796,7 @@ function createGuestVersionRecord(appId, payload) {
     priority: PRIORITY_META[payload.priority] ? payload.priority : "medium",
     plannedDate: normalizeLocalDueDate(payload.plannedDate),
     releaseDate: normalizeLocalDueDate(payload.releaseDate),
+    taskIds: normalizeGuestVersionTaskIds(payload.taskIds),
     publishedDate: resolveGuestPublishedDateForStatus(
       status,
       normalizeLocalDueDate(payload.publishedDate),
@@ -7706,10 +8127,20 @@ function normalizeGuestWorkspace(workspace) {
     validProjectIds.has(app.projectId)
   );
   const validAppIds = new Set(normalizedWorkspace.apps.map((app) => app.id));
-  normalizedWorkspace.versions = normalizedWorkspace.versions.filter((version) =>
-    validAppIds.has(version.appId)
-  );
   const appById = new Map(normalizedWorkspace.apps.map((app) => [app.id, app]));
+  const taskById = new Map(normalizedWorkspace.tasks.map((task) => [task.id, task]));
+  normalizedWorkspace.versions = normalizedWorkspace.versions
+    .filter((version) => validAppIds.has(version.appId))
+    .map((version) => {
+      const app = appById.get(version.appId);
+      return {
+        ...version,
+        taskIds: normalizeGuestVersionTaskIds(version.taskIds).filter((taskId) => {
+          const task = taskById.get(taskId);
+          return Boolean(task && app && task.projectId === app.projectId);
+        }),
+      };
+    });
   const versionById = new Map(
     normalizedWorkspace.versions.map((version) => [version.id, version])
   );
@@ -7899,6 +8330,7 @@ function normalizeGuestVersion(version) {
     channel: VERSION_CHANNEL_META[version.channel] ? version.channel : "stable",
     status,
     priority: PRIORITY_META[version.priority] ? version.priority : "medium",
+    taskIds: normalizeGuestVersionTaskIds(version.taskIds),
     plannedDate: /^\d{4}-\d{2}-\d{2}$/.test(String(version.plannedDate || ""))
       ? version.plannedDate
       : "",
@@ -7915,6 +8347,39 @@ function normalizeGuestVersion(version) {
     createdAt: version.createdAt || new Date().toISOString(),
     updatedAt: version.updatedAt || version.createdAt || new Date().toISOString(),
   };
+}
+
+function normalizeGuestVersionTaskIds(taskIds) {
+  if (!Array.isArray(taskIds)) {
+    return [];
+  }
+
+  return [...new Set(taskIds.map((taskId) => String(taskId || "").trim()).filter(Boolean))];
+}
+
+function removeTaskIdsFromGuestVersions(workspace, taskIds) {
+  const removedTaskIds = new Set(
+    normalizeGuestVersionTaskIds(Array.isArray(taskIds) ? taskIds : [taskIds])
+  );
+  if (!removedTaskIds.size) {
+    return;
+  }
+
+  workspace.versions = workspace.versions.map((version) => {
+    const nextTaskIds = normalizeGuestVersionTaskIds(version.taskIds).filter(
+      (taskId) => !removedTaskIds.has(taskId)
+    );
+
+    if (nextTaskIds.length === normalizeGuestVersionTaskIds(version.taskIds).length) {
+      return version;
+    }
+
+    return {
+      ...version,
+      taskIds: nextTaskIds,
+      updatedAt: new Date().toISOString(),
+    };
+  });
 }
 
 function guestWorkspaceHasMeaningfulData(workspace) {
@@ -8256,6 +8721,7 @@ function buildGuestProjectExportPayload(workspace, projectId) {
       notes: kiosk.notes,
     })),
     tasks: tasks.map((task) => ({
+      id: task.id,
       title: task.title,
       description: task.description,
       notes: task.notes,
@@ -8321,6 +8787,10 @@ function buildGuestAppExportPayload(workspace, appId) {
       plannedDate: version.plannedDate,
       releaseDate: version.releaseDate,
       publishedDate: version.publishedDate,
+      taskIds: normalizeGuestVersionTaskIds(version.taskIds),
+      taskTitles: normalizeGuestVersionTaskIds(version.taskIds)
+        .map((taskId) => workspace.tasks.find((task) => task.id === taskId)?.title || "")
+        .filter(Boolean),
     })),
   };
 }
@@ -8427,6 +8897,7 @@ function importProjectPayloadIntoGuestWorkspace(workspace, payload) {
   });
 
   const tagIdByName = new Map();
+  const taskIdMap = new Map();
   tags.forEach((tag) => {
     const tagId = createId();
     const normalizedName = String(tag.name || "").trim();
@@ -8462,6 +8933,9 @@ function importProjectPayloadIntoGuestWorkspace(workspace, payload) {
 
   tasks.forEach((task) => {
     const taskId = createId();
+    if (task.id) {
+      taskIdMap.set(String(task.id), taskId);
+    }
     workspace.tasks.push({
       id: taskId,
       projectId,
@@ -8503,11 +8977,76 @@ function importProjectPayloadIntoGuestWorkspace(workspace, payload) {
 
   if (Array.isArray(payload.apps)) {
     payload.apps.forEach((appPayload) => {
-      importAppPayloadIntoGuestWorkspace(workspace, appPayload, projectId);
+      importAppPayloadIntoGuestWorkspace(workspace, appPayload, projectId, { taskIdMap });
     });
   }
 
   workspace.currentProjectId = projectId;
+}
+
+function buildGuestProjectTaskReferenceMaps(workspace, projectId) {
+  const tasks = workspace.tasks.filter((task) => task.projectId === projectId);
+  const titleToTaskIds = new Map();
+
+  tasks.forEach((task) => {
+    const normalizedTitle = String(task.title || "").trim();
+    if (!normalizedTitle) {
+      return;
+    }
+
+    const taskIds = titleToTaskIds.get(normalizedTitle) || [];
+    taskIds.push(task.id);
+    titleToTaskIds.set(normalizedTitle, taskIds);
+  });
+
+  return {
+    validTaskIds: new Set(tasks.map((task) => task.id)),
+    titleToTaskIds,
+  };
+}
+
+function mapImportedGuestVersionTaskIds(workspace, projectId, versionPayload, options = {}) {
+  const { taskIdMap = null } = options;
+  const mappedTaskIds = [];
+
+  if (Array.isArray(versionPayload.taskIds) && versionPayload.taskIds.length) {
+    versionPayload.taskIds.forEach((taskId) => {
+      const normalizedTaskId = String(taskId || "").trim();
+      if (!normalizedTaskId) {
+        return;
+      }
+
+      const mappedTaskId = taskIdMap instanceof Map ? taskIdMap.get(normalizedTaskId) : null;
+      if (mappedTaskId) {
+        mappedTaskIds.push(mappedTaskId);
+      }
+    });
+  }
+
+  if (mappedTaskIds.length) {
+    return [...new Set(mappedTaskIds)];
+  }
+
+  if (!Array.isArray(versionPayload.taskTitles) || !versionPayload.taskTitles.length) {
+    return [];
+  }
+
+  const { titleToTaskIds } = buildGuestProjectTaskReferenceMaps(workspace, projectId);
+  const matchedTaskIds = [];
+
+  versionPayload.taskTitles.forEach((title) => {
+    const normalizedTitle = String(title || "").trim();
+    if (!normalizedTitle) {
+      return;
+    }
+
+    const matchedTaskId = titleToTaskIds.get(normalizedTitle)?.[0];
+    if (matchedTaskId) {
+      matchedTaskIds.push(matchedTaskId);
+    }
+  });
+
+  return [...new Set(matchedTaskIds)];
 }
 
 function createGuestImportProject(workspace, payload = {}) {
@@ -8532,7 +9071,7 @@ function inferGuestLegacyAppProjectName(apps) {
   return firstAppName ? `${String(firstAppName).trim()} 项目` : "导入应用项目";
 }
 
-function importAppPayloadIntoGuestWorkspace(workspace, payload, projectId = null) {
+function importAppPayloadIntoGuestWorkspace(workspace, payload, projectId = null, options = {}) {
   const appData = payload.app || payload;
   const projectData = payload.project || {};
   const versions = Array.isArray(payload.versions) ? payload.versions : [];
@@ -8577,6 +9116,7 @@ function importAppPayloadIntoGuestWorkspace(workspace, payload, projectId = null
       channel: VERSION_CHANNEL_META[version.channel] ? version.channel : "stable",
       status: VERSION_STATUS_META[version.status] ? version.status : "todo",
       priority: PRIORITY_META[version.priority] ? version.priority : "medium",
+      taskIds: mapImportedGuestVersionTaskIds(workspace, resolvedProjectId, version, options),
       plannedDate: /^\d{4}-\d{2}-\d{2}$/.test(String(version.plannedDate || ""))
         ? version.plannedDate
         : "",

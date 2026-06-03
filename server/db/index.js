@@ -132,6 +132,14 @@ function initializeSchema() {
       FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS app_version_tasks (
+      version_id TEXT NOT NULL,
+      task_id TEXT NOT NULL,
+      PRIMARY KEY (version_id, task_id),
+      FOREIGN KEY (version_id) REFERENCES app_versions(id) ON DELETE CASCADE,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS kiosks (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
@@ -160,6 +168,7 @@ function initializeSchema() {
     CREATE INDEX IF NOT EXISTS idx_apps_user_id ON apps(user_id);
     CREATE INDEX IF NOT EXISTS idx_apps_project_id ON apps(project_id);
     CREATE INDEX IF NOT EXISTS idx_app_versions_app_id ON app_versions(app_id);
+    CREATE INDEX IF NOT EXISTS idx_app_version_tasks_task_id ON app_version_tasks(task_id);
     CREATE INDEX IF NOT EXISTS idx_kiosks_project_id ON kiosks(project_id);
   `);
 

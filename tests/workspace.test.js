@@ -298,6 +298,7 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
           status: "review",
           priority: "medium",
           plannedDate: "2026-04-30",
+          taskIds: [createdTask.id, secondTask.id],
         },
       }
     );
@@ -305,6 +306,10 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(createdVersionResponse.status, 201);
     assert.equal(createdVersionResponse.body.version.projectId, createdProject.id);
     assert.equal(createdVersionResponse.body.version.versionName, "1.2.0");
+    assert.deepEqual(createdVersionResponse.body.version.taskIds, [
+      createdTask.id,
+      secondTask.id,
+    ]);
     const createdVersion = createdVersionResponse.body.version;
 
     const usageKioskResponse = await request(baseUrl, `/api/kiosks/${createdKiosk.id}`, {
@@ -333,6 +338,10 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(projectVersionsResponse.status, 200);
     assert.equal(projectVersionsResponse.body.versions.length, 1);
     assert.equal(projectVersionsResponse.body.versions[0].id, createdVersion.id);
+    assert.deepEqual(projectVersionsResponse.body.versions[0].taskIds, [
+      createdTask.id,
+      secondTask.id,
+    ]);
 
     const overviewResponse = await request(baseUrl, "/api/projects/overview", {
       cookie: sessionCookie,
@@ -394,6 +403,7 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     const exportedTask = exportPayload.tasks.find((task) => task.title === "补齐埋点校验");
     assert.equal(exportedTask.assignee, "Zenith");
     assert.equal(exportedTask.notes, "埋点字段已确认，待补回归截图。");
+    assert.equal(exportedTask.id, createdTask.id);
     assert.equal(exportedTask.startDate, "2026-04-20");
     assert.match(exportedTask.completedDate, /^\d{4}-\d{2}-\d{2}$/);
     assert.equal(exportedTask.tagNames[0], "前端联调");
@@ -402,6 +412,10 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(exportPayload.apps[0].app.name, "官网运营台");
     assert.equal(exportPayload.apps[0].versions.length, 1);
     assert.equal(exportPayload.apps[0].versions[0].versionName, "1.2.0");
+    assert.deepEqual(exportPayload.apps[0].versions[0].taskIds, [
+      createdTask.id,
+      secondTask.id,
+    ]);
 
     const clearCompletedResponse = await request(
       baseUrl,
@@ -431,6 +445,41 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(importedProjectResponse.body.importedCount, 1);
     assert.equal(importedProjectResponse.body.importedAppCount, 1);
     assert.equal(importedProjectResponse.body.importedKioskCount, 1);
+
+    const importedProjectId = importedProjectResponse.body.importedProjects[0].id;
+    const importedProjectBoardResponse = await request(
+      baseUrl,
+      `/api/projects/${importedProjectId}/board`,
+      {
+        cookie: sessionCookie,
+      }
+    );
+    assert.equal(importedProjectBoardResponse.status, 200);
+    assert.equal(importedProjectBoardResponse.body.tasks.length, 2);
+
+    const importedProjectAppsResponse = await request(
+      baseUrl,
+      `/api/projects/${importedProjectId}/apps`,
+      {
+        cookie: sessionCookie,
+      }
+    );
+    assert.equal(importedProjectAppsResponse.status, 200);
+    assert.equal(importedProjectAppsResponse.body.apps.length, 1);
+
+    const importedProjectAppBoardResponse = await request(
+      baseUrl,
+      `/api/projects/${importedProjectId}/apps/${importedProjectAppsResponse.body.apps[0].id}/board`,
+      {
+        cookie: sessionCookie,
+      }
+    );
+    assert.equal(importedProjectAppBoardResponse.status, 200);
+    assert.equal(importedProjectAppBoardResponse.body.versions.length, 1);
+    assert.deepEqual(
+      importedProjectAppBoardResponse.body.versions[0].taskIds.slice().sort(),
+      importedProjectBoardResponse.body.tasks.map((task) => task.id).sort()
+    );
 
     const workspaceImportResponse = await request(baseUrl, "/api/import/json", {
       method: "POST",
@@ -463,6 +512,7 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
             ],
             tasks: [
               {
+                id: "delivery-doc-task",
                 title: "编写交付说明",
                 description: "补齐环境变量和部署步骤。",
                 notes: "上线前和运维确认变量命名。",
@@ -492,6 +542,7 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
                     channel: "internal",
                     status: "doing",
                     priority: "medium",
+                    taskIds: ["delivery-doc-task"],
                   },
                 ],
               },
@@ -550,6 +601,9 @@ test("workspace APIs cover project, tag, task, import/export, and cleanup flows"
     assert.equal(importedAppBoardResponse.status, 200);
     assert.equal(importedAppBoardResponse.body.versions.length, 1);
     assert.equal(importedAppBoardResponse.body.versions[0].versionName, "0.9.0");
+    assert.deepEqual(importedAppBoardResponse.body.versions[0].taskIds, [
+      importedBoardResponse.body.tasks[0].id,
+    ]);
 
     const deleteImportedKioskResponse = await request(
       baseUrl,

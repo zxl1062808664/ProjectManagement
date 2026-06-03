@@ -53,6 +53,54 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(createdProjectResponse.status, 201);
     assert.equal(createdProject.name, "移动发布项目");
 
+    const releaseTaskResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/tasks`,
+      {
+        method: "POST",
+        cookie: sessionCookie,
+        body: {
+          title: "Release scope",
+          status: "doing",
+          priority: "high",
+        },
+      }
+    );
+    const releaseTask = releaseTaskResponse.body.task;
+    assert.equal(releaseTaskResponse.status, 201);
+
+    const regressionTaskResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/tasks`,
+      {
+        method: "POST",
+        cookie: sessionCookie,
+        body: {
+          title: "Login regression",
+          status: "todo",
+          priority: "medium",
+        },
+      }
+    );
+    const regressionTask = regressionTaskResponse.body.task;
+    assert.equal(regressionTaskResponse.status, 201);
+
+    const foreignTaskResponse = await request(
+      baseUrl,
+      `/api/projects/${defaultProject.id}/tasks`,
+      {
+        method: "POST",
+        cookie: sessionCookie,
+        body: {
+          title: "Foreign task",
+          status: "todo",
+          priority: "low",
+        },
+      }
+    );
+    const foreignTask = foreignTaskResponse.body.task;
+    assert.equal(foreignTaskResponse.status, 201);
+
     const initialAppsResponse = await request(
       baseUrl,
       `/api/projects/${createdProject.id}/apps`,
@@ -125,6 +173,25 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(invalidVersionResponse.status, 422);
     assert.equal(invalidVersionResponse.body.error.code, "INVALID_VERSION_IDENTIFIER");
 
+    const invalidLinkedTaskVersionResponse = await request(
+      baseUrl,
+      `/api/projects/${createdProject.id}/apps/${createdApp.id}/versions`,
+      {
+        method: "POST",
+        cookie: sessionCookie,
+        body: {
+          versionName: "2.3.9",
+          taskIds: [foreignTask.id],
+        },
+      }
+    );
+
+    assert.equal(invalidLinkedTaskVersionResponse.status, 422);
+    assert.equal(
+      invalidLinkedTaskVersionResponse.body.error.code,
+      "INVALID_VERSION_TASK_ID"
+    );
+
     const createdVersionResponse = await request(
       baseUrl,
       `/api/projects/${createdProject.id}/apps/${createdApp.id}/versions`,
@@ -143,6 +210,7 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
           priority: "high",
           plannedDate: "2026-04-20",
           releaseDate: "2026-04-28",
+          taskIds: [releaseTask.id],
         },
       }
     );
@@ -155,6 +223,7 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(createdVersion.buildNumber, "24015");
     assert.equal(createdVersion.resourceVersion, "ios-res-24015");
     assert.equal(createdVersion.publishedDate, "");
+    assert.deepEqual(createdVersion.taskIds, [releaseTask.id]);
 
     const updatedVersionResponse = await request(
       baseUrl,
@@ -166,6 +235,7 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
           status: "done",
           priority: "urgent",
           resourceVersion: "ios-res-24015-release",
+          taskIds: [releaseTask.id, regressionTask.id],
           notes: "已完成审核并正式发布。",
         },
       }
@@ -180,6 +250,10 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     );
     assert.equal(updatedVersionResponse.body.version.notes, "已完成审核并正式发布。");
     assert.match(updatedVersionResponse.body.version.publishedDate, /^\d{4}-\d{2}-\d{2}$/);
+    assert.deepEqual(updatedVersionResponse.body.version.taskIds, [
+      releaseTask.id,
+      regressionTask.id,
+    ]);
 
     const resourceOnlyVersionResponse = await request(
       baseUrl,
@@ -306,6 +380,10 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(boardResponse.body.versions[0].channel, "gray");
     assert.equal(boardResponse.body.versions[0].owner, "Zenith");
     assert.equal(boardResponse.body.versions[0].resourceVersion, "ios-res-24015-release");
+    assert.deepEqual(boardResponse.body.versions[0].taskIds, [
+      releaseTask.id,
+      regressionTask.id,
+    ]);
     const resourceOnlyVersionInBoard = boardResponse.body.versions.find(
       (version) => version.id === resourceOnlyVersion.id
     );
@@ -329,6 +407,14 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     assert.equal(exportPayload.versions.length, 3);
     assert.equal(exportPayload.versions[0].buildNumber, "24015");
     assert.equal(exportPayload.versions[0].resourceVersion, "ios-res-24015-release");
+    assert.deepEqual(exportPayload.versions[0].taskIds, [
+      releaseTask.id,
+      regressionTask.id,
+    ]);
+    assert.deepEqual(exportPayload.versions[0].taskTitles, [
+      "Release scope",
+      "Login regression",
+    ]);
     const resourceOnlyExport = exportPayload.versions.find(
       (version) => version.resourceVersion === "ios-assets-24015-hotfix-2"
     );

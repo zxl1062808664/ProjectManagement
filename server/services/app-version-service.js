@@ -31,6 +31,13 @@ const updateProjectTimestampStatement = db.prepare(`
   WHERE id = ?
 `);
 
+const selectTaskRefsByProjectStatement = db.prepare(`
+  SELECT id, title
+  FROM tasks
+  WHERE project_id = ?
+  ORDER BY position ASC, created_at ASC
+`);
+
 const selectAppsByUserStatement = db.prepare(`
   SELECT
     id,
@@ -265,6 +272,49 @@ const updateVersionStatusStatement = db.prepare(`
   WHERE id = ?
 `);
 
+const selectVersionTaskLinksByAppStatement = db.prepare(`
+  SELECT app_version_tasks.version_id, app_version_tasks.task_id
+  FROM app_version_tasks
+  JOIN app_versions ON app_versions.id = app_version_tasks.version_id
+  WHERE app_versions.app_id = ?
+  ORDER BY app_versions.position ASC, app_versions.created_at DESC, app_version_tasks.rowid ASC
+`);
+
+const selectVersionTaskLinksByProjectStatement = db.prepare(`
+  SELECT app_version_tasks.version_id, app_version_tasks.task_id
+  FROM app_version_tasks
+  JOIN app_versions ON app_versions.id = app_version_tasks.version_id
+  JOIN apps ON apps.id = app_versions.app_id
+  WHERE apps.user_id = ? AND apps.project_id = ?
+  ORDER BY apps.archived ASC, apps.updated_at DESC, app_versions.position ASC, app_versions.created_at DESC, app_version_tasks.rowid ASC
+`);
+
+const selectVersionTaskLinksByVersionStatement = db.prepare(`
+  SELECT task_id
+  FROM app_version_tasks
+  WHERE version_id = ?
+  ORDER BY rowid ASC
+`);
+
+const insertVersionTaskLinkStatement = db.prepare(`
+  INSERT INTO app_version_tasks (version_id, task_id)
+  VALUES (?, ?)
+`);
+
+const deleteVersionTaskLinksByVersionStatement = db.prepare(`
+  DELETE FROM app_version_tasks
+  WHERE version_id = ?
+`);
+
+const deleteVersionTaskLinksByAppStatement = db.prepare(`
+  DELETE FROM app_version_tasks
+  WHERE version_id IN (
+    SELECT id
+    FROM app_versions
+    WHERE app_id = ?
+  )
+`);
+
 const deleteVersionStatement = db.prepare(`
   DELETE FROM app_versions
   WHERE id = ?
@@ -305,7 +355,10 @@ function listAppsByProject(userId, projectId) {
 
 function listVersionsByProject(userId, projectId) {
   const project = getProjectOrThrow(userId, projectId);
-  return selectVersionsByProjectStatement.all(userId, project.id).map(mapVersionRow);
+  return attachTaskIdsToVersions(
+    selectVersionsByProjectStatement.all(userId, project.id).map(mapVersionRow),
+    selectVersionTaskLinksByProjectStatement.all(userId, project.id)
+  );
 }
 
 function getAppOverview(userId, projectId) {
@@ -470,6 +523,7 @@ function updateApp(userId, appId, payload = {}) {
 
   if (currentApp.projectId !== updatedApp.projectId) {
     clearKioskActiveAppStatement.run(updatedApp.updatedAt, appId);
+    deleteVersionTaskLinksByAppStatement.run(appId);
     touchProject(currentApp.projectId, updatedApp.updatedAt);
   }
   touchProject(updatedApp.projectId, updatedApp.updatedAt);
@@ -495,7 +549,7 @@ function createVersion(userId, projectId, appId, payload = {}) {
   const app = getAppOrThrow(userId, appId);
   assertAppBelongsToProject(app, projectId);
   const normalizedVersion = normalizeVersionInput(app.id, payload);
-  return persistVersionRecord(userId, app.id, normalizedVersion);
+  return runTransaction(() => persistVersionRecord(userId, app.id, normalizedVersion));
 }
 
 function updateVersion(userId, versionId, payload = {}) {
@@ -526,33 +580,36 @@ function updateVersion(userId, versionId, payload = {}) {
         payload.publishedDate === undefined
           ? currentVersion.publishedDate
           : payload.publishedDate,
+      taskIds: payload.taskIds === undefined ? currentVersion.taskIds : payload.taskIds,
     },
     {
       previousVersion: currentVersion,
     }
   );
 
-  const updatedAt = new Date().toISOString();
-  updateVersionStatement.run(
-    normalizedVersion.versionName,
-    normalizedVersion.buildNumber,
-    normalizedVersion.resourceVersion,
-    normalizedVersion.description,
-    normalizedVersion.notes,
-    normalizedVersion.owner,
-    normalizedVersion.channel,
-    normalizedVersion.status,
-    normalizedVersion.priority,
-    normalizedVersion.plannedDate,
-    normalizedVersion.releaseDate,
-    normalizedVersion.publishedDate,
-    updatedAt,
-    versionId
-  );
+  return runTransaction(() => {
+    const updatedAt = new Date().toISOString();
+    updateVersionStatement.run(
+      normalizedVersion.versionName,
+      normalizedVersion.buildNumber,
+      normalizedVersion.resourceVersion,
+      normalizedVersion.description,
+      normalizedVersion.notes,
+      normalizedVersion.owner,
+      normalizedVersion.channel,
+      normalizedVersion.status,
+      normalizedVersion.priority,
+      normalizedVersion.plannedDate,
+      normalizedVersion.releaseDate,
+      normalizedVersion.publishedDate,
+      updatedAt,
+      versionId
+    );
+    syncVersionTaskLinks(versionId, normalizedVersion.taskIds);
+    touchProject(currentVersion.projectId, updatedAt);
 
-  touchProject(currentVersion.projectId, updatedAt);
-
-  return getVersionOrThrow(userId, versionId);
+    return getVersionOrThrow(userId, versionId);
+  });
 }
 
 function bulkUpdateVersions(userId, projectId, appId, payload = {}) {
@@ -622,14 +679,14 @@ function exportAppsByProject(userId, projectId) {
   return apps.map((app) => buildAppExportEntry(app));
 }
 
-function importAppsIntoProject(userId, projectId, appPayloads = []) {
+function importAppsIntoProject(userId, projectId, appPayloads = [], options = {}) {
   getProjectOrThrow(userId, projectId);
 
   if (!Array.isArray(appPayloads)) {
     return [];
   }
 
-  return appPayloads.map((appPayload) => importAppPayload(userId, projectId, appPayload));
+  return appPayloads.map((appPayload) => importAppPayload(userId, projectId, appPayload, options));
 }
 
 function importAppData(userId, payload = {}) {
@@ -714,7 +771,7 @@ function importProjectScopedApps(userId, payload) {
   };
 }
 
-function importAppPayload(userId, projectId, payload) {
+function importAppPayload(userId, projectId, payload, options = {}) {
   const appData = payload.app || payload;
   const versions = Array.isArray(payload.versions) ? payload.versions : [];
 
@@ -744,6 +801,7 @@ function importAppPayload(userId, projectId, payload) {
         plannedDate: item.plannedDate,
         releaseDate: item.releaseDate,
         publishedDate: item.publishedDate,
+        taskIds: mapImportedVersionTaskIds(projectId, item, options),
       })
     );
   });
@@ -752,10 +810,16 @@ function importAppPayload(userId, projectId, payload) {
 }
 
 function listVersionsByApp(appId) {
-  return selectVersionsByAppStatement.all(appId).map(mapVersionRow);
+  return attachTaskIdsToVersions(
+    selectVersionsByAppStatement.all(appId).map(mapVersionRow),
+    selectVersionTaskLinksByAppStatement.all(appId)
+  );
 }
 
 function buildAppExportEntry(app) {
+  const versions = listVersionsByApp(app.id);
+  const taskTitlesById = buildProjectTaskTitleMap(app.projectId);
+
   return {
     app: {
       name: app.name,
@@ -765,7 +829,7 @@ function buildAppExportEntry(app) {
       bundleId: app.bundleId,
       archived: app.archived,
     },
-    versions: listVersionsByApp(app.id).map((item) => ({
+    versions: versions.map((item) => ({
       versionName: item.versionName,
       buildNumber: item.buildNumber,
       resourceVersion: item.resourceVersion,
@@ -779,6 +843,10 @@ function buildAppExportEntry(app) {
       releaseDate: item.releaseDate,
       publishedDate: item.publishedDate,
       position: item.position,
+      taskIds: item.taskIds,
+      taskTitles: item.taskIds
+        .map((taskId) => taskTitlesById.get(taskId))
+        .filter(Boolean),
     })),
   };
 }
@@ -881,7 +949,12 @@ function getVersionOrThrow(userId, versionId) {
     throw createHttpError(404, "APP_VERSION_NOT_FOUND", "版本记录不存在");
   }
 
-  return mapVersionRow(row);
+  return {
+    ...mapVersionRow(row),
+    taskIds: selectVersionTaskLinksByVersionStatement
+      .all(versionId)
+      .map((link) => link.task_id),
+  };
 }
 
 function assertAppBelongsToProject(app, projectId) {
@@ -889,6 +962,122 @@ function assertAppBelongsToProject(app, projectId) {
   if (!normalizedProjectId || app.projectId !== normalizedProjectId) {
     throw createHttpError(404, "APP_NOT_FOUND", "应用不存在");
   }
+}
+
+function attachTaskIdsToVersions(versions, links) {
+  const taskIdsByVersionId = new Map();
+
+  links.forEach((link) => {
+    const taskIds = taskIdsByVersionId.get(link.version_id) || [];
+    taskIds.push(link.task_id);
+    taskIdsByVersionId.set(link.version_id, taskIds);
+  });
+
+  return versions.map((version) => ({
+    ...version,
+    taskIds: taskIdsByVersionId.get(version.id) || [],
+  }));
+}
+
+function syncVersionTaskLinks(versionId, taskIds = []) {
+  deleteVersionTaskLinksByVersionStatement.run(versionId);
+  taskIds.forEach((taskId) => {
+    insertVersionTaskLinkStatement.run(versionId, taskId);
+  });
+}
+
+function buildProjectTaskReferenceMaps(projectId) {
+  const tasks = selectTaskRefsByProjectStatement.all(projectId);
+  const titleToTaskIds = new Map();
+
+  tasks.forEach((task) => {
+    const normalizedTitle = String(task.title || "").trim();
+    if (!normalizedTitle) {
+      return;
+    }
+
+    const taskIds = titleToTaskIds.get(normalizedTitle) || [];
+    taskIds.push(task.id);
+    titleToTaskIds.set(normalizedTitle, taskIds);
+  });
+
+  return {
+    validTaskIds: new Set(tasks.map((task) => task.id)),
+    titleToTaskIds,
+  };
+}
+
+function buildProjectTaskTitleMap(projectId) {
+  return new Map(
+    selectTaskRefsByProjectStatement
+      .all(projectId)
+      .map((task) => [task.id, String(task.title || "").trim() || "未命名任务"])
+  );
+}
+
+function normalizeVersionTaskIds(projectId, taskIds) {
+  if (taskIds === undefined || taskIds === null || taskIds === "") {
+    return [];
+  }
+
+  if (!Array.isArray(taskIds)) {
+    throw createHttpError(422, "INVALID_VERSION_TASK_IDS", "版本关联任务格式无效");
+  }
+
+  const { validTaskIds } = buildProjectTaskReferenceMaps(projectId);
+  const normalizedTaskIds = [...new Set(taskIds.map((taskId) => String(taskId).trim()).filter(Boolean))];
+
+  normalizedTaskIds.forEach((taskId) => {
+    if (!validTaskIds.has(taskId)) {
+      throw createHttpError(422, "INVALID_VERSION_TASK_ID", "版本关联任务包含无效任务");
+    }
+  });
+
+  return normalizedTaskIds;
+}
+
+function mapImportedVersionTaskIds(projectId, versionPayload, options = {}) {
+  const { taskIdMap = null } = options;
+  const mappedTaskIds = [];
+
+  if (Array.isArray(versionPayload.taskIds) && versionPayload.taskIds.length) {
+    versionPayload.taskIds.forEach((taskId) => {
+      const normalizedTaskId = String(taskId || "").trim();
+      if (!normalizedTaskId) {
+        return;
+      }
+
+      const mappedTaskId = taskIdMap instanceof Map ? taskIdMap.get(normalizedTaskId) : null;
+      if (mappedTaskId) {
+        mappedTaskIds.push(mappedTaskId);
+      }
+    });
+  }
+
+  if (mappedTaskIds.length) {
+    return [...new Set(mappedTaskIds)];
+  }
+
+  if (!Array.isArray(versionPayload.taskTitles) || !versionPayload.taskTitles.length) {
+    return [];
+  }
+
+  const { titleToTaskIds } = buildProjectTaskReferenceMaps(projectId);
+  const matchedTaskIds = [];
+
+  versionPayload.taskTitles.forEach((title) => {
+    const normalizedTitle = String(title || "").trim();
+    if (!normalizedTitle) {
+      return;
+    }
+
+    const candidateTaskId = titleToTaskIds.get(normalizedTitle)?.[0];
+    if (candidateTaskId) {
+      matchedTaskIds.push(candidateTaskId);
+    }
+  });
+
+  return [...new Set(matchedTaskIds)];
 }
 
 function persistVersionRecord(userId, appId, normalizedVersion) {
@@ -917,6 +1106,7 @@ function persistVersionRecord(userId, appId, normalizedVersion) {
     now,
     now
   );
+  syncVersionTaskLinks(versionId, normalizedVersion.taskIds);
 
   touchProject(app.projectId, now);
 
@@ -926,7 +1116,7 @@ function persistVersionRecord(userId, appId, normalizedVersion) {
 function normalizeVersionInput(appId, payload = {}, options = {}) {
   const { previousVersion = null } = options;
 
-  getAppOrThrowFromAppId(appId);
+  const app = getAppOrThrowFromAppId(appId);
 
   const status = normalizeEnum(payload.status, VALID_STATUSES, "todo", "INVALID_STATUS");
   const identity = normalizeVersionIdentity(payload);
@@ -958,6 +1148,7 @@ function normalizeVersionInput(appId, payload = {}, options = {}) {
       publishedDate: payload.publishedDate,
       previousVersion,
     }),
+    taskIds: normalizeVersionTaskIds(app.projectId, payload.taskIds),
   };
 }
 
