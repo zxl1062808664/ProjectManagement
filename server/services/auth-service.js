@@ -48,7 +48,7 @@ const selectSessionUserStatement = db.prepare(`
   WHERE sessions.token_hash = ?
 `);
 
-function registerUser({ username, password }) {
+function createUser({ username, password }) {
   const normalizedUsername = normalizeUsername(username);
   validateCredentials(normalizedUsername, password);
 
@@ -85,7 +85,7 @@ function registerUser({ username, password }) {
     now
   );
 
-  return createSessionForUser(user);
+  return sanitizeUser(user);
 }
 
 function loginUser({ username, password }) {
@@ -250,9 +250,9 @@ function createHttpError(status, code, message) {
 }
 
 module.exports = {
+  createUser,
   loginUser,
   logoutSession,
-  registerUser,
   getSessionUser,
   SESSION_DURATION_MS,
 };

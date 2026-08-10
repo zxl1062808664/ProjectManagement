@@ -1,5 +1,17 @@
 # Task Atlas
 
+## Administrator Account Creation
+
+Public registration is disabled. Create an account only from the server command line:
+
+```powershell
+$env:TASK_ATLAS_ADMIN_PASSWORD = "choose-a-strong-password"
+npm run user:create -- your_username
+Remove-Item Env:TASK_ATLAS_ADMIN_PASSWORD
+```
+
+Usernames must be 3-24 lowercase letters, digits, underscores, or hyphens. Passwords must be at least 8 characters.
+
 Task Atlas 采用原生前端加 `Node.js + Express + SQLite`。当前界面以“项目管理”为中心组织任务、Kiosk 和 App 版本数据：项目统一在项目管理模块里创建和维护，任务管理、Kiosk 统计与 App 版本管理都只使用已有项目。
 
 ## 技术栈

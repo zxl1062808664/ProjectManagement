@@ -11,6 +11,7 @@ process.env.TASK_ATLAS_DB_PATH = path.join(
 fs.rmSync(process.env.TASK_ATLAS_DB_PATH, { force: true });
 
 const app = require("../server/app");
+const { createUser } = require("../server/services/auth-service");
 
 test("app version APIs cover app, version, import/export, and bulk status flows", async () => {
   const server = app.listen(0);
@@ -19,7 +20,12 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
     const { port } = server.address();
     const baseUrl = `http://127.0.0.1:${port}`;
 
-    const registerResponse = await request(baseUrl, "/api/auth/register", {
+    createUser({
+      username: "release_user",
+      password: "securepass123",
+    });
+
+    const loginResponse = await request(baseUrl, "/api/auth/login", {
       method: "POST",
       body: {
         username: "release_user",
@@ -27,8 +33,8 @@ test("app version APIs cover app, version, import/export, and bulk status flows"
       },
     });
 
-    assert.equal(registerResponse.status, 201);
-    const sessionCookie = registerResponse.headers.get("set-cookie");
+    assert.equal(loginResponse.status, 200);
+    const sessionCookie = loginResponse.headers.get("set-cookie");
     assert.match(sessionCookie, /task_atlas_session=/);
 
     const initialProjectsResponse = await request(baseUrl, "/api/projects", {

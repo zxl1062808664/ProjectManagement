@@ -45,6 +45,8 @@
 
 ## Current Status
 
+- Authentication update: public registration is disabled; administrators create accounts locally with the server-side command, and unauthenticated visitors see only login.
+
 - App 版本管理现在支持在发布版本时通过可搜索下拉多选绑定当前项目中的任务，游客模式与账号云端模式都会保留 `taskIds` 关联，项目级 JSON 导入导出也会随任务映射一起恢复版本-任务绑定。
 - 所有开发阶段已完成，前后端仍保持游客本地模式与账号云端模式的数据通路。
 - 左侧主导航现已统一收拢到“项目管理”分类，包含“项目管理”“任务总览”“任务管理”“Kiosk 统计”“版本总览”和“App 版本管理”六个入口。
@@ -63,6 +65,8 @@
 - 数据工具、JSON 导入导出、游客导入云端和演示数据流程仍保持可用，并会同时覆盖任务数据、Kiosk 数据与 App 版本数据。
 
 ## Next Steps
+
+- Access control update: maintain the local administrator account-creation command and keep the public registration route disabled.
 
 1. 如需继续扩展任务管理，可增加项目统计图表、任务搜索高亮和更多批量操作。
 2. 也可以继续扩展项目维度的设备与发布管理，例如 Kiosk 在线状态、打印机巡检记录、版本变更日志、渠道发布记录和审核节点时间线。

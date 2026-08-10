@@ -133,9 +133,9 @@ const state = {
     loading: true,
     submitting: false,
   },
-  guestWorkspace: loadGuestWorkspace(),
-  workspace: createEmptyWorkspaceView("guest"),
-  appWorkspace: createEmptyAppWorkspaceView("guest"),
+  guestWorkspace: createEmptyGuestWorkspace(),
+  workspace: createEmptyWorkspaceView("cloud"),
+  appWorkspace: createEmptyAppWorkspaceView("cloud"),
   scheduleAllProjects: createEmptyScheduleAllProjectsView(),
   ui: {
     themeMode: loadThemeMode(),
@@ -184,6 +184,13 @@ const state = {
 };
 
 const elements = {
+  appShell: document.querySelector("#appShell"),
+  authGate: document.querySelector("#authGate"),
+  authGateForm: document.querySelector("#authGateForm"),
+  authGateStatus: document.querySelector("#authGateStatus"),
+  authGateUsernameInput: document.querySelector("#authGateUsernameInput"),
+  authGatePasswordInput: document.querySelector("#authGatePasswordInput"),
+  authGateSubmitButton: document.querySelector("#authGateSubmitButton"),
   toolboxNav: document.querySelector("#toolboxNav"),
   toolboxGroups: document.querySelectorAll("[data-group]"),
   toolboxButtons: document.querySelectorAll("[data-tool]"),
@@ -399,7 +406,6 @@ const elements = {
   jsonImportInput: document.querySelector("#jsonImportInput"),
   authCopy: document.querySelector("#authCopy"),
   authForm: document.querySelector("#authForm"),
-  authModeButtons: document.querySelectorAll("[data-auth-mode]"),
   authUsernameInput: document.querySelector("#authUsernameInput"),
   authPasswordInput: document.querySelector("#authPasswordInput"),
   authSubmitButton: document.querySelector("#authSubmitButton"),
@@ -423,8 +429,13 @@ async function init() {
   updateTodayLabel();
 
   await restoreSession();
-  await loadWorkspaceForCurrentMode();
-  render();
+  if (state.auth.user) {
+    await loadWorkspaceForCurrentMode();
+    render();
+    return;
+  }
+
+  renderAuth();
 }
 
 function bindEvents() {
@@ -512,12 +523,10 @@ function bindEvents() {
   elements.versionDetailList.addEventListener("click", handleVersionListClick);
   elements.versionDetailList.addEventListener("change", handleVersionListChange);
   elements.authForm.addEventListener("submit", handleAuthSubmit);
+  elements.authGateForm.addEventListener("submit", handleAuthSubmit);
   elements.refreshSessionButton.addEventListener("click", handleRefreshSession);
   elements.logoutButton.addEventListener("click", handleLogout);
 
-  elements.authModeButtons.forEach((button) => {
-    button.addEventListener("click", handleAuthModeChange);
-  });
   elements.themeModeButtons.forEach((button) => {
     button.addEventListener("click", handleThemeModeChange);
   });
@@ -2872,15 +2881,6 @@ async function handleVersionListChange(event) {
   }
 }
 
-function handleAuthModeChange(event) {
-  if (state.auth.loading || state.auth.submitting || state.auth.user) {
-    return;
-  }
-
-  state.auth.mode = event.currentTarget.dataset.authMode || "login";
-  renderAuth();
-}
-
 function handleThemeModeChange(event) {
   const nextThemeMode = normalizeThemeMode(event.currentTarget.dataset.themeMode);
   if (nextThemeMode === state.ui.themeMode) {
@@ -2900,8 +2900,9 @@ async function handleAuthSubmit(event) {
     return;
   }
 
-  const username = elements.authUsernameInput.value.trim();
-  const password = elements.authPasswordInput.value;
+  const form = event.currentTarget;
+  const username = form.elements.username.value.trim();
+  const password = form.elements.password.value;
 
   if (!username || !password) {
     showToast("请输入用户名和密码");
@@ -2912,9 +2913,7 @@ async function handleAuthSubmit(event) {
   renderAuth();
 
   try {
-    const endpoint =
-      state.auth.mode === "register" ? "/api/auth/register" : "/api/auth/login";
-    const response = await apiRequest(endpoint, {
+    const response = await apiRequest("/api/auth/login", {
       method: "POST",
       body: {
         username,
@@ -2925,10 +2924,11 @@ async function handleAuthSubmit(event) {
     state.auth.user = response.user ?? null;
     state.auth.session = response.session ?? null;
     elements.authPasswordInput.value = "";
+    elements.authGatePasswordInput.value = "";
 
     await loadWorkspaceForCurrentMode();
     render();
-    showToast(state.auth.mode === "register" ? "账号已创建" : "登录成功");
+    showToast("登录成功");
   } catch (error) {
     showToast(error.message);
   } finally {
@@ -2965,8 +2965,9 @@ async function handleLogout() {
 
     clearAuthState();
     elements.authPasswordInput.value = "";
-    await loadWorkspaceForCurrentMode();
-    render();
+    elements.authGatePasswordInput.value = "";
+    resetWorkspaceAfterLogout();
+    renderAuth();
     showToast("已退出登录");
   } catch (error) {
     showToast(error.message);
@@ -3013,11 +3014,7 @@ async function loadWorkspaceForCurrentMode(options = {}) {
     return;
   }
 
-  syncGuestView(options.projectId, options);
-  syncGuestAppView(options.appId, {
-    ...options,
-    projectId: options.projectId || state.guestWorkspace.currentProjectId,
-  });
+  resetWorkspaceAfterLogout();
 }
 
 async function loadCloudWorkspace(options = {}) {
@@ -3071,7 +3068,7 @@ async function loadCloudWorkspace(options = {}) {
   } catch (error) {
     if (error.status === 401) {
       clearAuthState();
-      syncGuestView(null, { preserveProjectCreateMode });
+      resetWorkspaceAfterLogout({ preserveProjectCreateMode });
     }
 
     if (!silent) {
@@ -3183,7 +3180,7 @@ async function loadCloudAppWorkspace(options = {}) {
   } catch (error) {
     if (error.status === 401) {
       clearAuthState();
-      syncGuestAppView(null, { preserveAppCreateMode });
+      resetWorkspaceAfterLogout({ preserveAppCreateMode });
     }
 
     if (!silent) {
@@ -6490,24 +6487,23 @@ function renderAuth() {
   const isLoggedIn = Boolean(state.auth.user);
   const isBusy = state.auth.loading || state.auth.submitting;
 
+  elements.authGate.hidden = isLoggedIn;
+  elements.appShell.hidden = !isLoggedIn;
+
   elements.authCopy.textContent = isLoggedIn
     ? "当前账号会话已建立，项目管理、Kiosk 统计、任务管理和 App 版本管理都会直接连接云端工作区。"
-    : "当前未登录，项目管理、Kiosk 统计、任务管理和 App 版本管理会使用浏览器本地游客工作区。登录后将切换到账号云端。";
-
-  elements.authModeButtons.forEach((button) => {
-    const isActive = button.dataset.authMode === state.auth.mode;
-    button.classList.toggle("is-active", isActive);
-    button.disabled = isBusy || isLoggedIn;
-    button.setAttribute("aria-pressed", String(isActive));
-  });
+    : "请登录或注册账号后进入云端工作区。";
 
   elements.authForm.hidden = isLoggedIn;
   elements.authUserCard.hidden = !isLoggedIn;
   elements.authUsernameInput.disabled = isBusy || isLoggedIn;
   elements.authPasswordInput.disabled = isBusy || isLoggedIn;
   elements.authSubmitButton.disabled = isBusy || isLoggedIn;
-  elements.authSubmitButton.textContent =
-    state.auth.mode === "register" ? "创建账号" : "登录账号";
+  elements.authGateUsernameInput.disabled = isBusy || isLoggedIn;
+  elements.authGatePasswordInput.disabled = isBusy || isLoggedIn;
+  elements.authGateSubmitButton.disabled = isBusy || isLoggedIn;
+  elements.authSubmitButton.textContent = "登录账号";
+  elements.authGateSubmitButton.textContent = "登录";
   elements.refreshSessionButton.disabled = isBusy || !isLoggedIn;
   elements.logoutButton.disabled = isBusy || !isLoggedIn;
 
@@ -8015,6 +8011,16 @@ function clearAuthState() {
   state.auth.session = null;
 }
 
+function resetWorkspaceAfterLogout(options = {}) {
+  const { preserveProjectCreateMode = false, preserveAppCreateMode = false } = options;
+
+  invalidateScheduleAllProjectsCache();
+  state.workspace = createEmptyWorkspaceView("cloud");
+  state.appWorkspace = createEmptyAppWorkspaceView("cloud");
+  syncEditorStateAfterWorkspaceSync({ preserveProjectCreateMode });
+  syncAppEditorStateAfterWorkspaceSync({ preserveAppCreateMode });
+}
+
 function loadThemeMode() {
   return normalizeThemeMode(window.localStorage.getItem(THEME_STORAGE_KEY));
 }
@@ -9167,6 +9173,10 @@ async function apiRequest(url, options = {}) {
 }
 
 function showToast(message) {
+  if (!state.auth.user) {
+    elements.authGateStatus.textContent = message;
+  }
+
   window.clearTimeout(state.toastTimer);
   elements.toast.textContent = message;
   elements.toast.classList.add("show");
