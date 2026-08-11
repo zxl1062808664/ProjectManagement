@@ -11,7 +11,33 @@ process.env.TASK_ATLAS_DB_PATH = path.join(
 fs.rmSync(process.env.TASK_ATLAS_DB_PATH, { force: true });
 
 const app = require("../server/app");
-const { createUser } = require("../server/services/auth-service");
+const {
+  createUser,
+  loginUser,
+  resetUserPassword,
+} = require("../server/services/auth-service");
+
+test("administrator can overwrite an existing account password", () => {
+  createUser({
+    username: "reset_user",
+    password: "original-pass",
+  });
+
+  const user = resetUserPassword({
+    username: "reset_user",
+    password: "replacement-pass",
+  });
+
+  assert.equal(user.username, "reset_user");
+  assert.throws(
+    () => loginUser({ username: "reset_user", password: "original-pass" }),
+    { code: "INVALID_CREDENTIALS" }
+  );
+  assert.equal(
+    loginUser({ username: "reset_user", password: "replacement-pass" }).user.username,
+    "reset_user"
+  );
+});
 
 test("auth flow supports administrator-provisioned login, session restore, protected route, and logout", async () => {
   const server = app.listen(0);

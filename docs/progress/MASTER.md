@@ -45,7 +45,11 @@
 
 ## Current Status
 
+- Project manager layout update: the project list now renders as a normal full-width workspace panel instead of using the fixed-width editor-panel layout.
+- Local account launcher update: when the requested username already exists, `scripts/create-user.bat` asks whether to replace that account's password. A confirmed replacement invalidates active sessions for that account.
 - Authentication update: public registration is disabled; administrators create accounts locally with the server-side command, and unauthenticated visitors see only login.
+- Administrator account creation is also available through the interactive `scripts/create-user.bat` launcher.
+- Interface update: navigation and tab-header help copy is hidden so the workspace emphasizes names, data, and actions.
 
 - App 版本管理现在支持在发布版本时通过可搜索下拉多选绑定当前项目中的任务，游客模式与账号云端模式都会保留 `taskIds` 关联，项目级 JSON 导入导出也会随任务映射一起恢复版本-任务绑定。
 - 所有开发阶段已完成，前后端仍保持游客本地模式与账号云端模式的数据通路。
@@ -66,7 +70,11 @@
 
 ## Next Steps
 
+- Keep primary workspace views separate from fixed-position editor panels as views are added.
+- Maintain the local overwrite-password prompt as part of the administrator account creation workflow.
 - Access control update: maintain the local administrator account-creation command and keep the public registration route disabled.
+- Maintain the interactive administrator account-creation launcher alongside the command-line workflow.
+- Keep navigation and right-side tab headers free of explanatory copy as new views are added.
 
 1. 如需继续扩展任务管理，可增加项目统计图表、任务搜索高亮和更多批量操作。
 2. 也可以继续扩展项目维度的设备与发布管理，例如 Kiosk 在线状态、打印机巡检记录、版本变更日志、渠道发布记录和审核节点时间线。

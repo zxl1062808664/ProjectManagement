@@ -3582,6 +3582,7 @@ function renderToolbox() {
     ? `账号：${state.auth.user.username}`
     : "游客模式";
   elements.workspaceModePill.textContent = modeLabel;
+  elements.toolboxProjectMeta.hidden = true;
 
   if (state.ui.activeTool === "projects") {
     elements.toolboxProjectName.textContent = currentProject ? currentProject.name : "项目管理";

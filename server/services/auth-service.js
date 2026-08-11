@@ -15,6 +15,12 @@ const selectUserByUsernameStatement = db.prepare(`
   WHERE username = ?
 `);
 
+const updateUserPasswordStatement = db.prepare(`
+  UPDATE users
+  SET password_hash = ?, updated_at = ?
+  WHERE username = ?
+`);
+
 const insertSessionStatement = db.prepare(`
   INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at)
   VALUES (?, ?, ?, ?, ?)
@@ -28,6 +34,11 @@ const insertProjectStatement = db.prepare(`
 const deleteSessionByHashStatement = db.prepare(`
   DELETE FROM sessions
   WHERE token_hash = ?
+`);
+
+const deleteSessionsByUserIdStatement = db.prepare(`
+  DELETE FROM sessions
+  WHERE user_id = ?
 `);
 
 const deleteExpiredSessionsStatement = db.prepare(`
@@ -86,6 +97,31 @@ function createUser({ username, password }) {
   );
 
   return sanitizeUser(user);
+}
+
+function resetUserPassword({ username, password }) {
+  const normalizedUsername = normalizeUsername(username);
+  validateCredentials(normalizedUsername, password);
+
+  const existingUser = selectUserByUsernameStatement.get(normalizedUsername);
+  if (!existingUser) {
+    throw createHttpError(404, "USER_NOT_FOUND", "User does not exist");
+  }
+
+  const updatedAt = new Date().toISOString();
+  updateUserPasswordStatement.run(
+    hashPassword(password),
+    updatedAt,
+    normalizedUsername
+  );
+  deleteSessionsByUserIdStatement.run(existingUser.id);
+
+  return {
+    id: existingUser.id,
+    username: existingUser.username,
+    createdAt: existingUser.created_at,
+    updatedAt,
+  };
 }
 
 function loginUser({ username, password }) {
@@ -251,6 +287,7 @@ function createHttpError(status, code, message) {
 
 module.exports = {
   createUser,
+  resetUserPassword,
   loginUser,
   logoutSession,
   getSessionUser,

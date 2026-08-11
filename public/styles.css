@@ -569,6 +569,24 @@ body[data-theme="night"] .panel::before {
   line-height: 1.65;
 }
 
+/* Keep navigation and page headers focused on names and actions, not help copy. */
+.brand-copy,
+.toolbox-copy,
+.toolbox-group-copy small,
+.toolbox-button small,
+.topbar-copy {
+  display: none;
+}
+
+.toolbox-current {
+  gap: 10px;
+}
+
+.toolbox-button,
+.toolbox-action-button {
+  gap: 3px;
+}
+
 .auth-copy {
   margin: 0;
   line-height: 1.65;

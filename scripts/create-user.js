@@ -1,8 +1,12 @@
 const { databasePath } = require("../server/db");
-const { createUser } = require("../server/services/auth-service");
+const {
+  createUser,
+  resetUserPassword,
+} = require("../server/services/auth-service");
 
 const username = process.argv[2];
 const password = process.env.TASK_ATLAS_ADMIN_PASSWORD;
+const resetPassword = process.argv.includes("--reset");
 
 if (!username || !password) {
   console.error(
@@ -11,11 +15,13 @@ if (!username || !password) {
   process.exitCode = 1;
 } else {
   try {
-    const user = createUser({ username, password });
-    console.log(`Created user: ${user.username}`);
+    const user = resetPassword
+      ? resetUserPassword({ username, password })
+      : createUser({ username, password });
+    console.log(`${resetPassword ? "Updated password for" : "Created"} user: ${user.username}`);
     console.log(`Database: ${databasePath}`);
   } catch (error) {
     console.error(error.message);
-    process.exitCode = 1;
+    process.exitCode = error.code === "USERNAME_TAKEN" ? 2 : 1;
   }
 }
