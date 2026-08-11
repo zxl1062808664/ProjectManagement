@@ -126,6 +126,29 @@ body[data-theme="night"] .ambient-two {
   padding: 24px;
 }
 
+.auth-gate {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-gate-panel {
+  display: grid;
+  width: min(100%, 520px);
+  gap: 24px;
+  padding: clamp(28px, 5vw, 48px);
+}
+
+.auth-gate-status {
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--red);
+  line-height: 1.5;
+}
+
 .panel {
   position: relative;
   overflow: hidden;
@@ -544,6 +567,24 @@ body[data-theme="night"] .panel::before {
 .topbar-copy {
   margin: 14px 0 0;
   line-height: 1.65;
+}
+
+/* Keep navigation and page headers focused on names and actions, not help copy. */
+.brand-copy,
+.toolbox-copy,
+.toolbox-group-copy small,
+.toolbox-button small,
+.topbar-copy {
+  display: none;
+}
+
+.toolbox-current {
+  gap: 10px;
+}
+
+.toolbox-button,
+.toolbox-action-button {
+  gap: 3px;
 }
 
 .auth-copy {
@@ -1128,6 +1169,10 @@ body[data-theme="night"] .panel::before {
   background: rgba(255, 255, 255, 0.72);
 }
 
+.task-record-card {
+  min-width: 0;
+}
+
 .project-overview-head,
 .recent-task-head,
 .task-record-head,
@@ -1504,6 +1549,15 @@ body[data-theme="night"] .panel::before {
 .detail-task-list-panel .task-record-body {
   display: grid;
   gap: 6px;
+  min-width: 0;
+}
+
+.detail-task-list-panel .task-description,
+.detail-task-list-panel .task-note,
+.detail-task-list-panel .task-record-meta,
+.detail-task-list-panel .subtask-item span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .detail-task-list-panel .task-record-title,

@@ -5,8 +5,9 @@
   "description": "A web-based task management tool with native frontend and Node.js backend.",
   "main": "server/app.js",
   "scripts": {
-    "check": "node --check public/app.js && node --check server/app.js && node --check server/routes/auth.js && node --check server/routes/workspace.js && node --check server/routes/apps.js && node --check server/services/auth-service.js && node --check server/services/workspace-service.js && node --check server/services/app-version-service.js",
+    "check": "node --check public/app.js && node --check server/app.js && node --check server/routes/auth.js && node --check server/routes/workspace.js && node --check server/routes/apps.js && node --check server/services/auth-service.js && node --check server/services/workspace-service.js && node --check server/services/app-version-service.js && node --check scripts/create-user.js",
     "dev": "node --watch server/app.js",
+    "user:create": "node scripts/create-user.js",
     "seed:demo": "node scripts/seed-demo.js",
     "start": "node server/app.js",
     "test": "node --test"

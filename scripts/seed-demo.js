@@ -1,5 +1,5 @@
 const { db, databasePath } = require("../server/db");
-const { loginUser, registerUser } = require("../server/services/auth-service");
+const { createUser, loginUser } = require("../server/services/auth-service");
 const {
   createProject,
   createTag,
@@ -43,10 +43,10 @@ function main() {
 function ensureDemoUser() {
   const existingUser = selectUserByUsernameStatement.get(DEMO_USERNAME);
   if (!existingUser) {
-    return registerUser({
+    return createUser({
       username: DEMO_USERNAME,
       password: DEMO_PASSWORD,
-    }).user;
+    });
   }
 
   try {

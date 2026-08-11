@@ -3,7 +3,6 @@ const express = require("express");
 const {
   loginUser,
   logoutSession,
-  registerUser,
 } = require("../services/auth-service");
 const {
   clearSessionCookie,
@@ -13,15 +12,11 @@ const {
 
 const router = express.Router();
 
-router.post("/register", (req, res) => {
-  const { user, session } = registerUser(req.body || {});
-  setSessionCookie(res, session.token, session.expiresAt);
-
-  res.status(201).json({
-    authenticated: true,
-    user,
-    session: {
-      expiresAt: session.expiresAt,
+router.all("/register", (req, res) => {
+  res.status(403).json({
+    error: {
+      code: "REGISTRATION_DISABLED",
+      message: "Public registration is disabled.",
     },
   });
 });

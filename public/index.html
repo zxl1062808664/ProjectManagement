@@ -11,7 +11,53 @@
     <div class="ambient ambient-one"></div>
     <div class="ambient ambient-two"></div>
 
-    <div class="app-shell">
+    <main class="auth-gate" id="authGate" aria-labelledby="authGateTitle">
+      <section class="auth-gate-panel panel">
+        <div class="brand-block">
+          <p class="eyebrow">Task Atlas</p>
+          <h1 id="authGateTitle">任务与版本管理</h1>
+          <p class="brand-copy">登录后进入你的云端工作区，集中管理项目、任务、Kiosk 和 App 版本。</p>
+        </div>
+
+        <form class="task-form" id="authGateForm">
+          <div class="field-grid">
+            <label class="field" for="authGateUsernameInput">
+              <span>用户名</span>
+              <input
+                id="authGateUsernameInput"
+                name="username"
+                type="text"
+                autocomplete="username"
+                placeholder="输入用户名"
+                required
+              />
+            </label>
+
+            <label class="field" for="authGatePasswordInput">
+              <span>密码</span>
+              <input
+                id="authGatePasswordInput"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="输入密码"
+                required
+              />
+            </label>
+          </div>
+
+          <p class="auth-gate-status" id="authGateStatus" aria-live="polite"></p>
+
+          <div class="form-actions">
+            <button class="primary-button" id="authGateSubmitButton" type="submit">
+              登录
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <div class="app-shell" id="appShell" hidden>
       <aside class="toolbox panel" aria-label="功能导航">
         <div class="brand-block toolbox-brand">
           <p class="eyebrow">Task Atlas</p>
@@ -353,7 +399,7 @@
               </div>
             </header>
 
-            <section class="panel panel-section detail-panel detail-panel-wide" aria-label="项目管理">
+            <section class="panel panel-section" aria-label="项目管理">
               <div class="section-heading">
                 <div>
                   <p class="section-kicker">Project Manager</p>
@@ -1755,23 +1801,6 @@
                 <p class="auth-copy" id="authCopy">
                   当前未登录，数据工具会使用浏览器本地游客工作区。登录后将切换为账号云端模式。
                 </p>
-
-                <div class="auth-mode-switch" role="tablist" aria-label="账号模式切换">
-                  <button
-                    class="ghost-button auth-mode-button is-active"
-                    type="button"
-                    data-auth-mode="login"
-                  >
-                    登录
-                  </button>
-                  <button
-                    class="ghost-button auth-mode-button"
-                    type="button"
-                    data-auth-mode="register"
-                  >
-                    注册
-                  </button>
-                </div>
 
                 <form class="task-form" id="authForm">
                   <div class="field-grid">

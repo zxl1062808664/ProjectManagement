@@ -11,15 +11,42 @@ process.env.TASK_ATLAS_DB_PATH = path.join(
 fs.rmSync(process.env.TASK_ATLAS_DB_PATH, { force: true });
 
 const app = require("../server/app");
+const {
+  createUser,
+  loginUser,
+  resetUserPassword,
+} = require("../server/services/auth-service");
 
-test("auth flow supports register, session restore, protected route, and logout", async () => {
+test("administrator can overwrite an existing account password", () => {
+  createUser({
+    username: "reset_user",
+    password: "original-pass",
+  });
+
+  const user = resetUserPassword({
+    username: "reset_user",
+    password: "replacement-pass",
+  });
+
+  assert.equal(user.username, "reset_user");
+  assert.throws(
+    () => loginUser({ username: "reset_user", password: "original-pass" }),
+    { code: "INVALID_CREDENTIALS" }
+  );
+  assert.equal(
+    loginUser({ username: "reset_user", password: "replacement-pass" }).user.username,
+    "reset_user"
+  );
+});
+
+test("auth flow supports administrator-provisioned login, session restore, protected route, and logout", async () => {
   const server = app.listen(0);
 
   try {
     const { port } = server.address();
     const baseUrl = `http://127.0.0.1:${port}`;
 
-    const registerResponse = await fetch(`${baseUrl}/api/auth/register`, {
+    const registrationResponse = await fetch(`${baseUrl}/api/auth/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -30,12 +57,32 @@ test("auth flow supports register, session restore, protected route, and logout"
       }),
     });
 
-    const registerPayload = await registerResponse.json();
-    const sessionCookie = registerResponse.headers.get("set-cookie");
+    const registrationPayload = await registrationResponse.json();
+    assert.equal(registrationResponse.status, 403);
+    assert.equal(registrationPayload.error.code, "REGISTRATION_DISABLED");
 
-    assert.equal(registerResponse.status, 201);
-    assert.equal(registerPayload.authenticated, true);
-    assert.equal(registerPayload.user.username, "phase2_user");
+    createUser({
+      username: "phase2_user",
+      password: "securepass123",
+    });
+
+    const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: "phase2_user",
+        password: "securepass123",
+      }),
+    });
+
+    const loginPayload = await loginResponse.json();
+    const sessionCookie = loginResponse.headers.get("set-cookie");
+
+    assert.equal(loginResponse.status, 200);
+    assert.equal(loginPayload.authenticated, true);
+    assert.equal(loginPayload.user.username, "phase2_user");
     assert.match(sessionCookie, /task_atlas_session=/);
 
     const sessionResponse = await fetch(`${baseUrl}/api/auth/session`, {
